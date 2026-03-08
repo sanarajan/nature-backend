@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const WishlistController_1 = require("../../controllers/WishlistController");
+const userAuthMiddleware_1 = require("../../../middleware/userAuthMiddleware");
+const router = (0, express_1.Router)();
+router.use(userAuthMiddleware_1.userAuthProtect);
+router.post('/toggle', WishlistController_1.toggleWishlist);
+router.post('/sync', WishlistController_1.syncWishlist);
+router.get('/', WishlistController_1.getWishlist);
+exports.default = router;

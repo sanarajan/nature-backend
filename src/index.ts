@@ -59,7 +59,7 @@ connectDB().then(() => {
 
 // Middleware
 app.use(helmet());
-app.use(cors({
+const corsOptions = {
   origin: [
     process.env.CLIENT_URL || "http://localhost:5173",
     "http://localhost:5173",
@@ -69,24 +69,10 @@ app.use(cors({
   credentials: true,
   methods: ["GET","POST","PUT","DELETE","OPTIONS"],
   allowedHeaders: ["Content-Type","Authorization","role"]
-}));
+};
 
-app.options("*", cors({
-  origin: [
-    process.env.CLIENT_URL || "http://localhost:5173",
-    "https://nature-frontend-puce.vercel.app"
-  ],
-  credentials: true,
-  allowedHeaders: ["Content-Type","Authorization","role"]
-}));
-app.options("*", cors({
-  origin: [
-    process.env.CLIENT_URL || "http://localhost:5173",
-    "https://nature-frontend-puce.vercel.app"
-  ],
-  credentials: true,
-  allowedHeaders: ["Content-Type","Authorization","role"]
-}));
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(cookieParser());

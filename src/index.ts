@@ -67,10 +67,26 @@ app.use(cors({
     "https://nature-frontend-puce.vercel.app"
   ],
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization", "role"]
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization","role"]
 }));
 
-app.options("*", cors()); 
+app.options("*", cors({
+  origin: [
+    process.env.CLIENT_URL || "http://localhost:5173",
+    "https://nature-frontend-puce.vercel.app"
+  ],
+  credentials: true,
+  allowedHeaders: ["Content-Type","Authorization","role"]
+}));
+app.options("*", cors({
+  origin: [
+    process.env.CLIENT_URL || "http://localhost:5173",
+    "https://nature-frontend-puce.vercel.app"
+  ],
+  credentials: true,
+  allowedHeaders: ["Content-Type","Authorization","role"]
+}));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(cookieParser());

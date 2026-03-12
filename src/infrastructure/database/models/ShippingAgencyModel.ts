@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IShippingAgency extends Document {
     name: string;
-    url: string;
+    trackingUrlTemplate: string;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -10,7 +10,7 @@ export interface IShippingAgency extends Document {
 
 const shippingAgencySchema = new Schema<IShippingAgency>({
     name: { type: String, required: true, unique: true },
-    url: { type: String, required: true },
+    trackingUrlTemplate: { type: String, required: true },
     isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 

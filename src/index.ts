@@ -68,7 +68,9 @@ const corsOptions = {
     process.env.CLIENT_URL || "http://localhost:5173",
     "http://localhost:5173",
     "http://localhost:5174",
-    "https://nature-frontend-puce.vercel.app"
+    "https://nature-frontend-puce.vercel.app",
+    "https://www.naturalayam.com"
+    
   ],
   credentials: true,
   methods: ["GET","POST","PUT","DELETE","OPTIONS"],

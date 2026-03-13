@@ -1,12 +1,15 @@
-# Dependency directories
+# Dependencies
 node_modules/
+jspm_packages/
 
 # Build outputs
 dist/
+lib/
+out/
 build/
 *.tsbuildinfo
 
-# Env variables
+# Environment variables
 .env
 .env.*
 !.env.example
@@ -17,18 +20,47 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# IDE / Editor settings
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
 
 # OS specific files
 .DS_Store
 Thumbs.db
-
-# IDE / Editor settings
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
+ehthumbs.db
+desktop.ini
 
 # Temporary files
-/tmp/
+tmp/
+temp/
 .temp/
 .cache/
+.eslintcache
+.stylelintcache
+
+# Node / Package managers
+.npm
+.node_repl_history
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Local uploads/storage
+uploads/
+storage/
+public/storage/

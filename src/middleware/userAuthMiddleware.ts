@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { container } from 'tsyringe';
-import { AuthService } from '../application/services/AuthService';
+import { IAuthService } from '../application/interfaces/IAuthService';
 
 export const userAuthProtect = async (
     req: Request,
     res: Response,
     next: NextFunction
 ) => {
+    console.log("reached in middleware user")
     let token;
     if (req.cookies && req.cookies.user_jwt) {
         token = req.cookies.user_jwt;
@@ -20,7 +21,7 @@ export const userAuthProtect = async (
         return;
     }
 
-    const authService = container.resolve<AuthService>('AuthService');
+    const authService = container.resolve<IAuthService>('IAuthService');
     try {
         const payload = await authService.verifyAccessToken(token);
 

@@ -1,8 +1,9 @@
 import nodemailer from 'nodemailer';
 import { injectable } from 'tsyringe';
+import { IEmailService } from '../../domain/services/IEmailService';
 
 @injectable()
-export class EmailService {
+export class EmailService implements IEmailService {
     private transporter;
 
     constructor() {

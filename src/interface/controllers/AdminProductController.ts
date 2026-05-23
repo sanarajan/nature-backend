@@ -117,7 +117,19 @@ export const addProduct = async (req: Request, res: Response) => {
 
 export const getAllProducts = async (req: Request, res: Response) => {
     try {
-        const products = await ProductModel.find()
+        const { search } = req.query;
+        let query = {};
+        
+        if (search) {
+            query = {
+                $or: [
+                    { productName: { $regex: search, $options: 'i' } },
+                    { sku: { $regex: search, $options: 'i' } }
+                ]
+            };
+        }
+
+        const products = await ProductModel.find(query)
             .populate({ path: 'categoryId', model: 'Category', select: 'categoryName' })
             .populate({ path: 'subcategoryId', model: 'SubCategory', select: 'subcategoryName' })
             .populate({ path: 'unitId', model: 'Unit', select: 'unitName' })

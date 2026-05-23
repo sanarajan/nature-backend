@@ -1,10 +1,11 @@
 import { inject, injectable } from 'tsyringe';
-import { JwtService } from '../../infrastructure/services/JwtService';
+import { IJwtService } from '../../domain/services/IJwtService';
+import { IAuthService } from '../interfaces/IAuthService';
 
 @injectable()
-export class AuthService {
+export class AuthService implements IAuthService {
     constructor(
-        private jwtService: JwtService
+        @inject('IJwtService') private jwtService: IJwtService
     ) { }
 
     async verifyAccessToken(token: string): Promise<any> {

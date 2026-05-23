@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import { inject, injectable } from 'tsyringe';
 import { ILoginUseCase } from '../../application/interfaces/ILoginUseCase';
-import { RegisterUseCase } from '../../application/usecases/RegisterUseCase';
-import { VerifyEmailUseCase } from '../../application/usecases/VerifyEmailUseCase';
+import { IRegisterUseCase } from '../../application/interfaces/IRegisterUseCase';
+import { IVerifyEmailUseCase } from '../../application/interfaces/IVerifyEmailUseCase';
 import { SuccessMessages } from '../../constants/messages/SuccessMessages';
-import { AuthService } from '../../application/services/AuthService';
+import { IAuthService } from '../../application/interfaces/IAuthService';
 import { IUserRepository } from '../../domain/repositories/IUserRepository';
 import { UserModel } from '../../infrastructure/database/models/UserModel';
 import { AddressModel } from '../../infrastructure/database/models/AddressModel';
@@ -15,9 +15,9 @@ import cloudinary from '../../infrastructure/config/cloudinary';
 export class AuthController {
     constructor(
         @inject('ILoginUseCase') private loginUseCase: ILoginUseCase,
-        @inject('RegisterUseCase') private registerUseCase: RegisterUseCase,
-        @inject('VerifyEmailUseCase') private verifyEmailUseCase: VerifyEmailUseCase,
-        @inject('AuthService') private authService: AuthService,
+        @inject('IRegisterUseCase') private registerUseCase: IRegisterUseCase,
+        @inject('IVerifyEmailUseCase') private verifyEmailUseCase: IVerifyEmailUseCase,
+        @inject('IAuthService') private authService: IAuthService,
         @inject('IUserRepository') private userRepository: IUserRepository
     ) { }
 

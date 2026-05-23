@@ -1,9 +1,10 @@
 import express from 'express';
+import { container } from '../../../infrastructure/config/container';
 import { UserOrderController } from '../../controllers/UserOrderController';
 import { userAuthProtect } from '../../../middleware/userAuthMiddleware';
 
 const router = express.Router();
-const userOrderController = new UserOrderController();
+const userOrderController = container.resolve(UserOrderController);
 
 router.post('/', userAuthProtect, (req, res) => userOrderController.placeOrder(req, res));
 router.get('/', userAuthProtect, (req, res) => userOrderController.getOrders(req, res));

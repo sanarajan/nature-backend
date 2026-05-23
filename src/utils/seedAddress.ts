@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import mongoose from 'mongoose';
-import { connectDB } from './infrastructure/config/database';
-import { AddressModel } from './infrastructure/database/models/AddressModel';
-import { UserModel } from './infrastructure/database/models/UserModel';
+import { connectDB } from '../infrastructure/config/database';
+import { AddressModel } from '../infrastructure/database/models/AddressModel';
+import { UserModel } from '../infrastructure/database/models/UserModel';
 
 const seedAddresses = async () => {
     try {

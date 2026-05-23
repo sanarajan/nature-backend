@@ -1,10 +1,13 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import { injectable } from 'tsyringe';
+import { IRazorpayService } from '../../domain/services/IRazorpayService';
 
 dotenv.config();
 
-export class RazorpayService {
+@injectable()
+export class RazorpayService implements IRazorpayService {
     public razorpay: Razorpay;
 
     constructor() {
@@ -38,5 +41,9 @@ export class RazorpayService {
             .digest('hex');
 
         return expectedSignature === razorpaySignature;
+    }
+
+    public async fetchPayment(paymentId: string): Promise<any> {
+        return this.razorpay.payments.fetch(paymentId);
     }
 }

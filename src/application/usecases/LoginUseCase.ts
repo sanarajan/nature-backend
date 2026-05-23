@@ -1,8 +1,8 @@
 import { inject, injectable } from 'tsyringe';
 import { ILoginUseCase, LoginResponse } from '../interfaces/ILoginUseCase';
 import { IUserRepository } from '../../domain/repositories/IUserRepository';
-import { PasswordService } from '../../infrastructure/services/PasswordService';
-import { JwtService } from '../../infrastructure/services/JwtService';
+import { IPasswordService } from '../../domain/services/IPasswordService';
+import { IJwtService } from '../../domain/services/IJwtService';
 import { ErrorMessages } from '../../constants/messages/ErrorMessages';
 import { UserRole } from '../../constants/enums/UserRole';
 
@@ -10,8 +10,8 @@ import { UserRole } from '../../constants/enums/UserRole';
 export class LoginUseCase implements ILoginUseCase {
     constructor(
         @inject('IUserRepository') private userRepository: IUserRepository,
-        private passwordService: PasswordService,
-        private jwtService: JwtService
+        @inject('IPasswordService') private passwordService: IPasswordService,
+        @inject('IJwtService') private jwtService: IJwtService
     ) { }
 
     async execute(email: string, password: string): Promise<LoginResponse> {

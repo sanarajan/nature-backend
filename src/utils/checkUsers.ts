@@ -1,9 +1,9 @@
 
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { UserModel } from './infrastructure/database/models/UserModel';
+import { UserModel } from '../infrastructure/database/models/UserModel';
 
-dotenv.config();
+dotenv.config({ path: '../../.env' }); // Adjusted for utils folder relative pathing logic if needed, but simple dotenv.config() often works if run from root.
 
 async function checkUsers() {
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/naturalayam');

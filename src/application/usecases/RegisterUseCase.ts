@@ -1,35 +1,23 @@
 import { inject, injectable } from 'tsyringe';
 import { IUserRepository } from '../../domain/repositories/IUserRepository';
-import { PasswordService } from '../../infrastructure/services/PasswordService';
-import { JwtService } from '../../infrastructure/services/JwtService';
+import { IPasswordService } from '../../domain/services/IPasswordService';
+import { IJwtService } from '../../domain/services/IJwtService';
 import { User } from '../../domain/entities/User';
 import { UserRole } from '../../constants/enums/UserRole';
-import { EmailService } from '../../infrastructure/services/EmailService';
+import { IEmailService } from '../../domain/services/IEmailService';
 import { UserOTPVerificationModel } from '../../infrastructure/database/models/UserOTPVerificationModel';
 import { UserModel } from '../../infrastructure/database/models/UserModel';
 import { WalletModel } from '../../infrastructure/database/models/WalletModel';
+import { IRegisterUseCase, RegisterRequest, RegisterResponse } from '../interfaces/IRegisterUseCase';
 import crypto from 'crypto';
 
-export interface RegisterRequest {
-    username: string;
-    email: string;
-    phoneNumber: string;
-    password?: string;
-    referralCode?: string;
-}
-
-export interface RegisterResponse {
-    user: Omit<User, 'password'>;
-    message: string;
-}
-
 @injectable()
-export class RegisterUseCase {
+export class RegisterUseCase implements IRegisterUseCase {
     constructor(
         @inject('IUserRepository') private userRepository: IUserRepository,
-        private passwordService: PasswordService,
-        private jwtService: JwtService,
-        private emailService: EmailService
+        @inject('IPasswordService') private passwordService: IPasswordService,
+        @inject('IJwtService') private jwtService: IJwtService,
+        @inject('IEmailService') private emailService: IEmailService
     ) { }
 
     async execute(data: RegisterRequest): Promise<RegisterResponse> {

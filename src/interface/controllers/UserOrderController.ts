@@ -6,21 +6,36 @@ import { ReferralSettingModel } from '../../infrastructure/database/models/Refer
 import { UserModel } from '../../infrastructure/database/models/UserModel';
 import { CouponModel } from '../../infrastructure/database/models/CouponModel';
 import { OfferModel } from '../../infrastructure/database/models/OfferModel';
+import { ComboOfferModel } from '../../infrastructure/database/models/ComboOfferModel';
 import { ShippingChargeModel } from '../../infrastructure/database/models/ShippingChargeModel';
 import mongoose from 'mongoose';
-import { RazorpayService } from '../../infrastructure/services/RazorpayService';
+import { IRazorpayService } from '../../domain/services/IRazorpayService';
 import crypto from 'crypto';
+import { inject, injectable } from 'tsyringe';
 
-const razorpayService = new RazorpayService();
+const roundTo2 = (num: number) => Math.round(num * 100) / 100;
 
+@injectable()
 export class UserOrderController {
+    constructor(
+        @inject('IRazorpayService') private razorpayService: IRazorpayService
+    ) { }
+
     public async placeOrder(req: Request, res: Response): Promise<void> {
         try {
+            console.log("place order entry")
             const userId = (req as any).user.id;
             const { addressId, paymentMethod, isOnline, referralCode, couponCode } = req.body;
 
             // Fetch Cart
-            const cart = await CartModel.findOne({ user: userId, isActive: true }).populate('products.product');
+            const cart = await CartModel.findOne({ user: userId, isActive: true })
+                .populate({
+                    path: 'products.product',
+                    populate: [
+                        { path: 'categoryId', select: 'categoryName _id' },
+                        { path: 'subcategoryId', select: 'subcategoryName _id' }
+                    ]
+                });
             if (!cart || cart.products.length === 0) {
                 res.status(400).json({ success: false, message: 'Cart is empty' });
                 return;
@@ -33,8 +48,16 @@ export class UserOrderController {
                 return;
             }
 
-            // Fetch all active offers
             const now = new Date();
+
+            // Fetch all active Combo Offers
+            const activeComboOffers = await ComboOfferModel.find({
+                status: true,
+                startDate: { $lte: now },
+                endDate: { $gte: now }
+            }).populate('products.productId');
+
+            // Fetch all active Product/Category Offers
             const activeOffers = await OfferModel.find({
                 status: true,
                 startDate: { $lte: now },
@@ -44,78 +67,258 @@ export class UserOrderController {
             // Calculate Order Info
             let subTotal = 0;
             let totalOfferDiscount = 0;
+            let appliedComboOfferId: any = null;
+            let appliedComboOfferName: string = '';
             let hasActiveOffers = false;
+            let hasComboOffer = false;
+
+            // 1. Check for Best Combo Offer (Priority 1)
+            let bestCombo: any = null;
+            let bestComboDiscount = 0;
+            let applications = 0;
+
+            for (const combo of activeComboOffers) {
+                let isComboMet = true;
+                let comboSetMRP = 0;
+
+                if (!combo.products || !Array.isArray(combo.products)) continue;
+
+                const requirements: Record<string, number> = {};
+                for (const cp of combo.products) {
+                    const prodDoc: any = cp.productId;
+                    const pId = prodDoc?._id?.toString() || cp.productId?.toString();
+                    if (!pId) continue;
+                    requirements[pId] = (requirements[pId] || 0) + cp.requiredQuantity;
+                    
+                    const price = Number(prodDoc?.price) || 0;
+                    comboSetMRP += price * cp.requiredQuantity;
+                }
+
+                const requiredPIds = Object.keys(requirements);
+                if (requiredPIds.length === 0) continue;
+
+                // Match check
+                for (const pId of requiredPIds) {
+                    const cartItem = cart.products.find((cp: any) => cp.product?._id?.toString() === pId);
+                    if (!cartItem || cartItem.quantity < requirements[pId]) {
+                        isComboMet = false;
+                        break;
+                    }
+                }
+
+                if (isComboMet) {
+                    let possibleApps = Infinity;
+                    for (const pId of requiredPIds) {
+                        const cartItem = cart.products.find((i: any) => i.product?._id?.toString() === pId);
+                        if (!cartItem) continue; // Should not happen due to match check above
+                        const appsForThisProd = Math.floor(cartItem.quantity / requirements[pId]);
+                        possibleApps = Math.min(possibleApps, appsForThisProd);
+                    }
+
+                    if (possibleApps > 0 && possibleApps !== Infinity) {
+                        let combosToApply = possibleApps;
+                        if (combo.maxUsagePerOrder && combo.maxUsagePerOrder > 0) {
+                            combosToApply = Math.min(possibleApps, combo.maxUsagePerOrder);
+                        }
+
+                        let discount = 0;
+                        const comboBaseAmount = roundTo2(comboSetMRP * combosToApply);
+
+                        if (combo.discountType === 'percentage') {
+                            discount = roundTo2((comboBaseAmount * (combo.discountValue || 0)) / 100);
+                        } else {
+                            discount = roundTo2((combo.discountValue || 0) * combosToApply);
+                        }
+
+                        if (discount > bestComboDiscount) {
+                            bestComboDiscount = discount;
+                            bestCombo = combo;
+                            applications = combosToApply;
+                            hasComboOffer = true;
+                        }
+                    }
+                }
+            }
+
+            if (bestCombo) {
+                appliedComboOfferId = bestCombo._id;
+                appliedComboOfferName = bestCombo.offerName;
+            }
+
+            // 2. Pre-calculate Distribution Record
+            const comboDistributions: Record<string, number> = {};
+            if (bestCombo && applications > 0) {
+                let remainingComboDiscount = bestComboDiscount;
+                const itemsToDistribute: any[] = [];
+                let actualUsedMRPTotal = 0;
+
+                cart.products.forEach((item: any) => {
+                    const pIdString = item.product?._id?.toString();
+                    if (!pIdString) return;
+
+                    const reqPerSet = bestCombo.products.reduce((acc: number, cp: any) => {
+                        const cpId = cp.productId?._id?.toString() || cp.productId?.toString();
+                        return cpId === pIdString ? acc + cp.requiredQuantity : acc;
+                    }, 0);
+
+                    if (reqPerSet > 0) {
+                        const usedQty = reqPerSet * applications;
+                        const price = Number(item.product.price) || 0;
+                        const usedMRP = roundTo2(price * usedQty);
+                        actualUsedMRPTotal += usedMRP;
+                        itemsToDistribute.push({ pId: pIdString, usedMRP });
+                    }
+                });
+
+                itemsToDistribute.forEach((item, idx) => {
+                    if (idx === itemsToDistribute.length - 1) {
+                        comboDistributions[item.pId] = roundTo2(remainingComboDiscount);
+                    } else {
+                        const share = roundTo2((item.usedMRP / actualUsedMRPTotal) * bestComboDiscount);
+                        comboDistributions[item.pId] = share;
+                        remainingComboDiscount = roundTo2(remainingComboDiscount - share);
+                    }
+                });
+            }
+
+            let totalMRP = 0;
+            let grandTotalDiscount = 0;
+            let hasProductOfferFlag = false;
+
+            const comboProductIds = new Set(
+                bestCombo?.products.map((p: any) =>
+                    p.productId?._id?.toString() || p.productId?.toString()
+                )
+            );
 
             const orderedProducts = cart.products.map((item: any) => {
                 const p = item.product;
                 const originalPrice = p.price || 0;
-                const qty = item.quantity || 1;
-                subTotal += (originalPrice * qty);
+                const totalQty = item.quantity || 1;
+                totalMRP += (originalPrice * totalQty);
+                const pIdString = p?._id?.toString();
 
-                // Find Best Offer for this product (Product Offer vs Category Offer)
-                let bestOffer: any = null;
-                let maxDiscountPerUnit = 0;
-
-                const applicableOffers = activeOffers.filter(offer =>
-                    (offer.offerFor === 'product' && offer.products?.toString() === p._id.toString()) ||
-                    (offer.offerFor === 'category' && offer.categories?.toString() === p.categoryId.toString())
-                );
-
-                applicableOffers.forEach(offer => {
-                    let discountValue = 0;
-                    if (offer.offerType === 'percentage') {
-                        discountValue = (originalPrice * (offer.offerPercentage || 0)) / 100;
-                    } else {
-                        discountValue = offer.offerAmount || 0;
-                    }
-
-                    if (discountValue > maxDiscountPerUnit) {
-                        maxDiscountPerUnit = discountValue;
-                        bestOffer = offer;
-                    }
-                });
-
-                const discountPerUnit = maxDiscountPerUnit;
-                const offerPrice = originalPrice - discountPerUnit;
-                const totalItemDiscount = discountPerUnit * qty;
-
-                if (bestOffer) {
-                    hasActiveOffers = true;
-                    totalOfferDiscount += totalItemDiscount;
+                let qtyInCombo = 0;
+                if (bestCombo) {
+                    const reqPerSet = bestCombo.products.reduce((acc: number, cp: any) => {
+                        const cpId = cp.productId?._id?.toString() || cp.productId?.toString();
+                        return cpId === pIdString ? acc + cp.requiredQuantity : acc;
+                    }, 0);
+                    qtyInCombo = reqPerSet * applications;
                 }
+
+                const qtyEligibleForIndividualOffer = totalQty - qtyInCombo;
+                const discounts: any = {};
+                let productTotalDiscount = 0;
+
+                // Combo Discount Share
+                if (qtyInCombo > 0) {
+                    const share = comboDistributions[pIdString] || 0;
+                    discounts.comboOffer = {
+                        offerId: bestCombo._id,
+                        offerName: bestCombo.offerName,
+                        discountAmount: share
+                    };
+                    productTotalDiscount += share;
+                }
+
+                // Individual Offers (Product/Category) for remaining quantities
+                // BUSINESS RULE: Individual offers are disabled if this product is part of the applied combo
+                if (!comboProductIds.has(pIdString) && qtyEligibleForIndividualOffer > 0) {
+                    let bestProductOffer: any = null;
+                    let bestCategoryOffer: any = null;
+                    
+                    const applicableOffers = activeOffers.filter(offer =>
+                        (offer.offerFor === 'product' && offer.productId?.toString() === p._id.toString()) ||
+                        (offer.offerFor === 'category' && offer.categoryId?.toString() === p.categoryId.toString())
+                    );
+
+                    applicableOffers.forEach(offer => {
+                        let discountAmt = 0;
+                        if (offer.discountType === 'percentage') {
+                            discountAmt = (originalPrice * (offer.discountValue || 0)) / 100;
+                        } else {
+                            discountAmt = offer.discountValue || 0;
+                        }
+
+                        if (offer.offerFor === 'product') {
+                            if (!bestProductOffer || discountAmt > (bestProductOffer.amt || 0)) {
+                                bestProductOffer = { offer, amt: discountAmt };
+                            }
+                        } else {
+                            if (!bestCategoryOffer || discountAmt > (bestCategoryOffer.amt || 0)) {
+                                bestCategoryOffer = { offer, amt: discountAmt };
+                            }
+                        }
+                    });
+
+                    if (bestProductOffer) {
+                        const amt = Math.round(bestProductOffer.amt * qtyEligibleForIndividualOffer);
+                        discounts.productOffer = {
+                            offerId: bestProductOffer.offer._id,
+                            offerName: bestProductOffer.offer.offerName,
+                            discountAmount: amt
+                        };
+                        productTotalDiscount += amt;
+                        hasProductOfferFlag = true;
+                    }
+
+                    if (bestCategoryOffer) {
+                        const amt = Math.round(bestCategoryOffer.amt * qtyEligibleForIndividualOffer);
+                        discounts.categoryOffer = {
+                            offerId: bestCategoryOffer.offer._id,
+                            offerName: bestCategoryOffer.offer.offerName,
+                            discountAmount: amt
+                        };
+                        productTotalDiscount += amt;
+                        hasProductOfferFlag = true;
+                    }
+                }
+
+                grandTotalDiscount += productTotalDiscount;
+                const finalPricePerUnit = ( (originalPrice * totalQty) - productTotalDiscount ) / totalQty;
 
                 return {
                     productId: p._id,
                     productName: p.productName,
                     category: p.categoryId,
-                    quantity: qty,
+                    quantity: totalQty,
                     image: p.images && p.images.length > 0 ? p.images[0] : '',
                     price: originalPrice,
-                    offerPercentage: bestOffer?.offerType === 'percentage' ? bestOffer.offerPercentage : undefined,
-                    offerPrice: offerPrice,
-                    discountOffer: totalItemDiscount, // The total discount applied to this product line
-                    offerId: bestOffer?._id || null,
+                    finalPrice: finalPricePerUnit,
+                    discounts: discounts,
                     orderStatus: isOnline ? 'Pending' : 'Order Placed'
                 };
             });
 
-            // Exclusivity Rule: If ANY product has an active offer, block coupon/referral
-            let finalDiscountAmount = totalOfferDiscount;
+            // REJECTION RULE: If ANY offer exists (Combo or Individual), reject coupon/referral
+            if ((hasComboOffer || hasProductOfferFlag) && (couponCode || referralCode)) {
+                res.status(400).json({ 
+                    success: false, 
+                    message: "Coupon or referral cannot be applied when an active offer exists." 
+                });
+                return;
+            }
+
+            // 3. Final Calculations
+            let finalDiscountAmount = grandTotalDiscount;
             let appliedReferralCode = '';
             let appliedReferralOwnerId: any = null;
             let appliedCouponId: any = null;
             let appliedCouponName: any = null;
 
-            if (!hasActiveOffers) {
-                // Only evaluate coupons/referrals if no product-level offers are active
+            if (!hasComboOffer && !hasProductOfferFlag) {
                 if (referralCode) {
                     const referrer = await UserModel.findOne({ referralId: referralCode });
                     if (referrer && referrer._id.toString() !== userId) {
                         const settings = await ReferralSettingModel.findOne({ isActive: true });
                         const discountPercent = settings?.offerPercentage || 20;
-                        finalDiscountAmount = (subTotal * discountPercent) / 100;
+                        finalDiscountAmount = (totalMRP * discountPercent) / 100;
                         appliedReferralCode = referralCode;
                         appliedReferralOwnerId = referrer._id;
+                        
+                        // Distribute referral discount proportionally to finalPrice if needed
+                        // For now we just use the global discount as before but labeled in Order
                     }
                 } else if (couponCode) {
                     const coupon = await CouponModel.findOne({
@@ -126,9 +329,9 @@ export class UserOrderController {
                     });
 
                     if (coupon) {
-                        if (subTotal >= coupon.minPurchase) {
+                        if (totalMRP >= coupon.minPurchase) {
                             if (coupon.discountType === 'Percentage') {
-                                finalDiscountAmount = (subTotal * (coupon.discountPercentage || 0)) / 100;
+                                finalDiscountAmount = (totalMRP * (coupon.discountPercentage || 0)) / 100;
                             } else {
                                 finalDiscountAmount = coupon.discountValue || 0;
                             }
@@ -156,7 +359,14 @@ export class UserOrderController {
                 deliveryCharge = stateCharge.charge;
             }
 
-            const totalAmount = subTotal + deliveryCharge - finalDiscountAmount;
+            const totalAmount = totalMRP + deliveryCharge - finalDiscountAmount;
+
+            // appliedOffersSummary
+            let summary = "";
+            if (hasComboOffer) summary += `Combo: ${bestCombo.offerName} `;
+            if (hasProductOfferFlag) summary += `Product/Category Offers Applied `;
+            if (appliedCouponName) summary += `Coupon: ${appliedCouponName} `;
+            if (appliedReferralCode) summary += `Referral: ${appliedReferralCode} `;
 
             // Create Unique Order ID: ORD + 12 unique digits
             const random12 = Math.floor(Math.random() * 900000000000 + 100000000000).toString();
@@ -183,20 +393,26 @@ export class UserOrderController {
                 },
                 deliveryCharge: deliveryCharge,
                 userId: userId,
-                totalPrice: subTotal,
-                discount: finalDiscountAmount,
+                totalMRP: totalMRP,
+                totalDiscount: finalDiscountAmount,
+                comboOffer: appliedComboOfferId,
+                comboOfferName: appliedComboOfferName,
                 totalAmount: totalAmount,
                 referralCode: appliedReferralCode,
                 referrerId: appliedReferralOwnerId,
                 coupon: appliedCouponId,
                 couponName: appliedCouponName,
+                hasComboOffer: hasComboOffer,
+                hasProductOffer: hasProductOfferFlag,
+                appliedOffersSummary: summary.trim(),
                 orderedProducts: orderedProducts
             });
 
             // Set placeholder for Razorpay logic block:
             // Handle Online Payment Initiation
             if (isOnline) {
-                const razorpayOrder = await razorpayService.createOrder(totalAmount, orderId);
+                console.log("yes it is razorpay")
+                const razorpayOrder = await this.razorpayService.createOrder(totalAmount, orderId);
                 newOrder.razorpayOrderId = razorpayOrder.id;
             }
 
@@ -205,7 +421,7 @@ export class UserOrderController {
             // Clear Cart after successful generic order creation (COD or Online initiation)
             cart.products = [];
             await cart.save();
-
+console.log(newOrder.razorpayOrderId,"new order razorpayid")
             res.status(200).json({
                 success: true,
                 message: isOnline ? 'Payment initiated' : 'Order placed successfully',
@@ -225,9 +441,11 @@ export class UserOrderController {
 
     public async verifyPayment(req: Request, res: Response): Promise<void> {
         try {
+            console.log("reached razor secret from checkou")
+
             const { orderId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
             const secret = process.env.RAZORPAY_KEY_SECRET || "NuhGj1P30sdMmbn0MhA021uV";
-
+console.log(secret,"razor secret from checkou")
             const order = await OrderModel.findOne({ orderId: orderId });
             if (!order) {
                 res.status(404).json({ success: false, message: 'Order not found' });
@@ -238,12 +456,19 @@ export class UserOrderController {
             const shasum = crypto.createHmac("sha256", secret);
             shasum.update(`${razorpayOrderId}|${razorpayPaymentId}`);
             const digest = shasum.digest("hex");
+console.log(digest,"digest")
+console.log(razorpaySignature,"razorpaySignature")
 
             // Verify the signature
             if (digest !== razorpaySignature) {
-                console.log("----Signature mismatch----");
+                console.error(`[VerifyPayment] Signature mismatch for order ${orderId}`);
                 order.paymentStatus = "Failed";
                 order.razorpayPaymentId = razorpayPaymentId;
+                order.statusHistory.push({
+                    status: 'Payment Verification Failed (Signature Mismatch)',
+                    timestamp: new Date(),
+                    updatedBy: 'System'
+                });
                 await order.save();
                 res.status(400).json({
                     success: false,
@@ -252,8 +477,10 @@ export class UserOrderController {
                 return;
             }
 
+            console.log(`[VerifyPayment] Signature verified for order ${orderId}. Fetching details...`);
+
             try {
-                const payment: any = await razorpayService.razorpay.payments.fetch(razorpayPaymentId);
+                const payment: any = await this.razorpayService.fetchPayment(razorpayPaymentId);
 
                 if (payment.status !== "captured") {
                     console.log("Non-success Payment Status: ", payment.status);
@@ -271,7 +498,8 @@ export class UserOrderController {
                 order.razorpayOrderId = razorpayOrderId;
                 order.razorpaySignature = razorpaySignature;
                 order.paymentStatus = "Completed";
-                order.globalOrderStatus = "PLACED";
+                order.globalOrderStatus = "PLACED"; // Order is now officially placed after payment
+                console.log(`[VerifyPayment] Payment captured. Saving IDs to order ${orderId}`);
 
                 // Update all product statuses to 'Order Placed'
                 order.orderedProducts.forEach(product => {

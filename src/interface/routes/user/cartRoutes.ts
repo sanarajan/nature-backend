@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { getCart, toggleCartItem, updateCartItemQuantity, removeCartItem, syncOfflineCart } from '../../controllers/CartController';
+import { getCart, toggleCartItem, updateCartItemQuantity, removeCartItem, syncOfflineCart, calculateCartTotals } from '../../controllers/CartController';
 import { userAuthProtect } from '../../../middleware/userAuthMiddleware';
 
 const router = Router();
+
+// Public calculation endpoint
+router.post('/calculate', calculateCartTotals);
 
 router.use(userAuthProtect);
 

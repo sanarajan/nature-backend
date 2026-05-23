@@ -2,36 +2,30 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IOfferDocument extends Document {
     offerName: string;
+    offerFor: 'product' | 'category';
+    productId?: mongoose.Types.ObjectId;
+    categoryId?: mongoose.Types.ObjectId;
+    discountType: 'percentage' | 'amount';
+    discountValue: number;
     startDate: Date;
     endDate: Date;
-    offerFor: 'product' | 'category';
-    products?: mongoose.Types.ObjectId;
-    categories?: mongoose.Types.ObjectId;
-    offerType?: 'percentage' | 'amount';
-    offerPercentage?: number;
-    offerAmount?: number;
-    productPrice?: number;
-    offerPrice?: number;
-    description?: string;
     status: boolean;
+    isDeleted: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
 
 const OfferSchema = new Schema<IOfferDocument>({
     offerName: { type: String, required: true, trim: true },
+    offerFor: { type: String, enum: ['product', 'category'], required: true },
+    productId: { type: Schema.Types.ObjectId, ref: 'Product' },
+    categoryId: { type: Schema.Types.ObjectId, ref: 'Category' },
+    discountType: { type: String, enum: ['percentage', 'amount'], required: true },
+    discountValue: { type: Number, required: true },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
-    offerFor: { type: String, enum: ['product', 'category'], required: true },
-    products: { type: Schema.Types.ObjectId, ref: 'Product' },
-    categories: { type: Schema.Types.ObjectId, ref: 'Category' },
-    offerType: { type: String, enum: ['percentage', 'amount'] },
-    offerPercentage: { type: Number },
-    offerAmount: { type: Number, default: 0 },
-    productPrice: { type: Number },
-    offerPrice: { type: Number },
-    description: { type: String, trim: true },
-    status: { type: Boolean, default: true }
+    status: { type: Boolean, default: true },
+    isDeleted: { type: Boolean, default: false }
 }, { timestamps: true });
 
 export const OfferModel = mongoose.model<IOfferDocument>('Offer', OfferSchema);

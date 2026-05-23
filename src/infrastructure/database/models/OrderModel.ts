@@ -14,13 +14,29 @@ export interface IOrderedProduct {
     productName: string;
     category: mongoose.Types.ObjectId;
     quantity: number;
-    discountProduct?: number;
     image: string;
-    price: number;
-    offerPercentage?: number;
-    offerPrice?: number;
-    discountOffer?: number;
-    offerId?: mongoose.Types.ObjectId;
+    price: number; // Original MRP
+    finalPrice: number; // Price after all discounts
+    offerPrice?: number; // Deprecated: For backward compatibility
+    offerPercentage?: number; // Deprecated
+    discountOffer?: number; // Deprecated
+    discounts: {
+        productOffer?: {
+            offerId: mongoose.Types.ObjectId;
+            offerName: string;
+            discountAmount: number;
+        };
+        categoryOffer?: {
+            offerId: mongoose.Types.ObjectId;
+            offerName: string;
+            discountAmount: number;
+        };
+        comboOffer?: {
+            offerId: mongoose.Types.ObjectId;
+            offerName: string;
+            discountAmount: number;
+        };
+    };
     orderStatus: 'Pending' | 'Order Placed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Cancellation Request' | 'Return Request' | 'Return' | 'Returned';
     shippingDetails?: {
         agencyName: string;
@@ -52,11 +68,14 @@ export interface IOrderDocument extends Document {
     couponName?: string;
     referralCode?: string;
     referrerId?: mongoose.Types.ObjectId;
-    discount?: number;
-    totalDiscount?: number;
-    totalMRP?: number;
-    totalPrice?: number;
-    totalAmount?: number;
+    comboOffer?: mongoose.Types.ObjectId;
+    comboOfferName?: string;
+    totalMRP: number;
+    totalDiscount: number;
+    totalAmount: number;
+    hasComboOffer?: boolean;
+    hasProductOffer?: boolean;
+    appliedOffersSummary?: string;
     orderedProducts: IOrderedProduct[];
     statusHistory: Array<{ status: string, timestamp: Date, updatedBy: string }>;
     cancelledAmount: number;
@@ -102,25 +121,43 @@ const orderSchema = new Schema<IOrderDocument>({
     deliveryCharge: { type: Number, required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     packingCharge: { type: Number },
-    totalPrice: { type: Number },
-    discount: { type: Number, default: 0 },
+    comboOffer: { type: Schema.Types.ObjectId, ref: 'ComboOffer', default: null },
+    comboOfferName: { type: String, default: null },
     referralCode: { type: String, default: '' },
     referrerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     coupon: { type: Schema.Types.ObjectId, ref: 'Coupon', default: null },
     couponName: { type: String, default: null },
+    totalMRP: { type: Number },
+    totalDiscount: { type: Number, default: 0 },
     totalAmount: { type: Number },
+    hasComboOffer: { type: Boolean, default: false },
+    hasProductOffer: { type: Boolean, default: false },
+    appliedOffersSummary: { type: String, default: '' },
     orderedProducts: [{
         productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
         productName: { type: String, required: true },
         category: { type: Schema.Types.ObjectId, ref: 'Category', required: true },
         quantity: { type: Number, required: true },
-        discountProduct: { type: Number },
         image: { type: String, required: true },
         price: { type: Number, required: true },
-        offerPercentage: { type: Number },
-        offerPrice: { type: Number },
-        discountOffer: { type: Number },
-        offerId: { type: Schema.Types.ObjectId, ref: 'Offer', default: null },
+        finalPrice: { type: Number },
+        discounts: {
+            productOffer: {
+                offerId: { type: Schema.Types.ObjectId, ref: 'Offer', default: null },
+                offerName: { type: String, default: null },
+                discountAmount: { type: Number, default: 0 }
+            },
+            categoryOffer: {
+                offerId: { type: Schema.Types.ObjectId, ref: 'Offer', default: null },
+                offerName: { type: String, default: null },
+                discountAmount: { type: Number, default: 0 }
+            },
+            comboOffer: {
+                offerId: { type: Schema.Types.ObjectId, ref: 'ComboOffer', default: null },
+                offerName: { type: String, default: null },
+                discountAmount: { type: Number, default: 0 }
+            }
+        },
         orderStatus: {
             type: String, enum: ['Pending', 'Order Placed', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Cancellation Request', 'Return Request', 'Return', 'Returned'],
             default: 'Order Placed'
@@ -203,14 +240,14 @@ orderSchema.pre('save', function (next) {
         this.globalOrderStatus = calculatedStatus as any;
         this.markModified('globalOrderStatus');
 
-        // Calculate cancelledAmount and returnedAmount
         let currentCancelledAmount = 0;
         let currentReturnedAmount = 0;
         this.orderedProducts.forEach(p => {
             if (p.orderStatus === 'Cancelled') {
-                currentCancelledAmount += (p.offerPrice || p.price) * p.quantity;
+                // FALLBACK for backward compatibility
+                currentCancelledAmount += (p.finalPrice ?? p.offerPrice ?? p.price) * p.quantity;
             } else if (p.orderStatus === 'Returned') {
-                currentReturnedAmount += (p.offerPrice || p.price) * p.quantity;
+                currentReturnedAmount += (p.finalPrice ?? p.offerPrice ?? p.price) * p.quantity;
             }
         });
         this.cancelledAmount = currentCancelledAmount;

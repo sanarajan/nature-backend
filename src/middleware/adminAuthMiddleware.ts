@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { container } from 'tsyringe';
-import { AuthService } from '../application/services/AuthService';
+import { IAuthService } from '../application/interfaces/IAuthService';
 
 export const adminAuthProtect = async (
     req: Request,
@@ -21,7 +21,7 @@ export const adminAuthProtect = async (
         return;
     }
 
-    const authService = container.resolve<AuthService>('AuthService');
+    const authService = container.resolve<IAuthService>('IAuthService');
     try {
         const payload = await authService.verifyAccessToken(token);
 

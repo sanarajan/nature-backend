@@ -1,5 +1,5 @@
-import { CountryModel } from './infrastructure/database/models/CountryModel';
-import { StateModel } from './infrastructure/database/models/StateModel';
+import { CountryModel } from '../infrastructure/database/models/CountryModel';
+import { StateModel } from '../infrastructure/database/models/StateModel';
 
 export const seedLocations = async () => {
     try {

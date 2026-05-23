@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // Adjust path as needed
-dotenv.config({ path: path.join(__dirname, '../.env') });
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nature-db';
 

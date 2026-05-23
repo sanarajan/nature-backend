@@ -2,14 +2,15 @@ import { inject, injectable } from 'tsyringe';
 import { IUserRepository } from '../../domain/repositories/IUserRepository';
 import { UserOTPVerificationModel } from '../../infrastructure/database/models/UserOTPVerificationModel';
 import { UserModel } from '../../infrastructure/database/models/UserModel';
-import { EmailService } from '../../infrastructure/services/EmailService';
+import { IEmailService } from '../../domain/services/IEmailService';
 import { ReferralSettingModel } from '../../infrastructure/database/models/ReferralSettingModel';
+import { IVerifyEmailUseCase } from '../interfaces/IVerifyEmailUseCase';
 
 @injectable()
-export class VerifyEmailUseCase {
+export class VerifyEmailUseCase implements IVerifyEmailUseCase {
     constructor(
         @inject('IUserRepository') private userRepository: IUserRepository,
-        private emailService: EmailService
+        @inject('IEmailService') private emailService: IEmailService
     ) { }
 
     async execute(email: string, token: string): Promise<{ success: boolean; message: string }> {

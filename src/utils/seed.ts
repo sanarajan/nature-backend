@@ -1,11 +1,11 @@
 import 'reflect-metadata';
-import { container } from './infrastructure/config/container';
-import { IUserRepository } from './domain/repositories/IUserRepository';
-import { PasswordService } from './infrastructure/services/PasswordService';
-import { User } from './domain/entities/User';
-import { UserRole } from './constants/enums/UserRole';
-import { connectDB } from './infrastructure/config/database';
-import { SuccessMessages } from './constants/messages/SuccessMessages';
+import { container } from '../infrastructure/config/container';
+import { IUserRepository } from '../domain/repositories/IUserRepository';
+import { PasswordService } from '../infrastructure/services/PasswordService';
+import { User } from '../domain/entities/User';
+import { UserRole } from '../constants/enums/UserRole';
+import { connectDB } from '../infrastructure/config/database';
+import { SuccessMessages } from '../constants/messages/SuccessMessages';
 
 const seedAdmin = async () => {
     await connectDB();

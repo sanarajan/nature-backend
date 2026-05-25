@@ -1,16 +1,20 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+
 export interface ICategoryDocument extends Document {
     categoryName: string;
     description?: string;
+    imageUrl?: string;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
 
+
 const categorySchema = new Schema<ICategoryDocument>({
     categoryName: { type: String, required: true, unique: true },
     description: { type: String },
+    imageUrl: { type: String },
     isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 

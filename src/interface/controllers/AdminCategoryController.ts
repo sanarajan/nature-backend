@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import { CategoryModel } from '../../infrastructure/database/models/CategoryModel';
 import { ProductModel } from '../../infrastructure/database/models/ProductModel';
+import cloudinary from '../../infrastructure/config/cloudinary';
 
 export const addCategory = async (req: Request, res: Response) => {
     try {
-        const { categoryName, description, isActive } = req.body;
+        const { categoryName, description, isActive, imageUrl } = req.body;
 
         if (!categoryName) {
             return res.status(400).json({ success: false, message: 'Category name is required' });
@@ -16,9 +17,18 @@ export const addCategory = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'Category name already exists constraints' });
         }
 
+        let uploadedImageUrl = imageUrl;
+        if (imageUrl && imageUrl.startsWith('data:image')) {
+            const uploadRes = await cloudinary.uploader.upload(imageUrl, {
+                folder: 'natural_ayam/categories',
+            });
+            uploadedImageUrl = uploadRes.secure_url;
+        }
+
         const newCategory = new CategoryModel({
             categoryName,
             description,
+            imageUrl: uploadedImageUrl,
             isActive: isActive !== undefined ? isActive : true
         });
 
@@ -44,7 +54,7 @@ export const getAllCategories = async (req: Request, res: Response) => {
 export const updateCategory = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { categoryName, description, isActive } = req.body;
+        const { categoryName, description, isActive, imageUrl } = req.body;
 
         if (!categoryName) {
             return res.status(400).json({ success: false, message: 'Category name is required' });
@@ -60,9 +70,17 @@ export const updateCategory = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'Category name already exists constraints' });
         }
 
+        let uploadedImageUrl = imageUrl;
+        if (imageUrl && imageUrl.startsWith('data:image')) {
+            const uploadRes = await cloudinary.uploader.upload(imageUrl, {
+                folder: 'natural_ayam/categories',
+            });
+            uploadedImageUrl = uploadRes.secure_url;
+        }
+
         const updatedCategory = await CategoryModel.findByIdAndUpdate(
             id,
-            { categoryName, description, isActive },
+            { categoryName, description, imageUrl: uploadedImageUrl, isActive },
             { new: true, runValidators: true }
         );
 

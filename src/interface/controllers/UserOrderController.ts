@@ -375,8 +375,7 @@ export class UserOrderController {
             const existingPendingOrder = await OrderModel.findOne({ 
                 userId, 
                 paymentStatus: { $in: ['Pending', 'Failed'] }, 
-                globalOrderStatus: 'PENDING',
-                paymentMethod: targetPaymentMethod
+                globalOrderStatus: 'PENDING'
             }).sort({ createdAt: -1 });
 
             let useExistingOrder: any = null;
@@ -396,7 +395,26 @@ export class UserOrderController {
 
                 if (isSame) {
                     useExistingOrder = existingPendingOrder;
+                    useExistingOrder.paymentMethod = targetPaymentMethod;
                     useExistingOrder.paymentStatus = 'Pending';
+                    
+                    if (!isOnline) {
+                        useExistingOrder.globalOrderStatus = 'PLACED';
+                        useExistingOrder.orderedProducts.forEach((p: any) => {
+                            if (p.orderStatus === 'Pending' || p.orderStatus === 'Failed') {
+                                p.orderStatus = 'Order Placed';
+                            }
+                        });
+                        useExistingOrder.statusHistory.push({
+                            status: 'Order Placed (Switched to COD)',
+                            timestamp: new Date(),
+                            updatedBy: 'Customer'
+                        });
+                        
+                        useExistingOrder.razorpayOrderId = null;
+                        useExistingOrder.razorpayPaymentId = null;
+                        useExistingOrder.razorpaySignature = null;
+                    }
                 } else {
                     existingPendingOrder.globalOrderStatus = 'Expired';
                     existingPendingOrder.paymentStatus = 'Expired';

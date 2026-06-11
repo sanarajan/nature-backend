@@ -398,10 +398,13 @@ export class UserOrderController {
                     useExistingOrder = existingPendingOrder;
                     useExistingOrder.paymentStatus = 'Pending';
                 } else {
-                    existingPendingOrder.globalOrderStatus = 'CANCELLED';
-                    existingPendingOrder.paymentStatus = 'Failed';
+                    existingPendingOrder.globalOrderStatus = 'Expired';
+                    existingPendingOrder.paymentStatus = 'Expired';
+                    existingPendingOrder.orderedProducts.forEach((p: any) => {
+                        p.orderStatus = 'Expired';
+                    });
                     existingPendingOrder.statusHistory.push({
-                        status: 'Cancelled due to cart/address change on retry',
+                        status: 'Expired due to cart/address change on retry',
                         timestamp: new Date(),
                         updatedBy: 'System'
                     });

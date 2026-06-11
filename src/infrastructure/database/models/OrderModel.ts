@@ -37,7 +37,7 @@ export interface IOrderedProduct {
             discountAmount: number;
         };
     };
-    orderStatus: 'Pending' | 'Order Placed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Cancellation Request' | 'Return Request' | 'Return' | 'Returned';
+    orderStatus: 'Pending' | 'Order Placed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Cancellation Request' | 'Return Request' | 'Return' | 'Returned' | 'Expired';
     shippingDetails?: {
         agencyName: string;
         trackingNumber: string;
@@ -55,8 +55,8 @@ export interface IOrderDocument extends Document {
     orderId: string;
     invoiceNo?: number;
     paymentMethod: 'COD' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'Online';
-    paymentStatus?: 'Pending' | 'Success' | 'Failed' | 'Completed' | 'Refund_Pending' | 'Refunded' | 'Cancelled' | 'Returned';
-    globalOrderStatus: 'PENDING' | 'PLACED' | 'PARTIALLY_PROCESSING' | 'PROCESSING' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST';
+    paymentStatus?: 'Pending' | 'Success' | 'Failed' | 'Completed' | 'Refund_Pending' | 'Refunded' | 'Cancelled' | 'Returned' | 'Expired';
+    globalOrderStatus: 'PENDING' | 'PLACED' | 'PARTIALLY_PROCESSING' | 'PROCESSING' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired';
     razorpayPaymentId?: string;
     razorpayOrderId?: string;
     razorpaySignature?: string;
@@ -83,11 +83,11 @@ export interface IOrderDocument extends Document {
     refundedAmount: number;
     createdAt: Date;
     updatedAt: Date;
-    calculateGlobalOrderStatus(): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST';
+    calculateGlobalOrderStatus(): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired';
 }
 
 export interface IOrderModel extends mongoose.Model<IOrderDocument> {
-    calculateGlobalStatus(products: IOrderedProduct[]): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST';
+    calculateGlobalStatus(products: IOrderedProduct[]): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired';
 }
 
 const orderSchema = new Schema<IOrderDocument>({
@@ -100,11 +100,11 @@ const orderSchema = new Schema<IOrderDocument>({
     },
     paymentStatus: {
         type: String,
-        enum: ['Pending', 'Success', 'Failed', 'Completed', 'Refunded', 'Refund_Pending', 'Cancelled', 'Returned'],
+        enum: ['Pending', 'Success', 'Failed', 'Completed', 'Refunded', 'Refund_Pending', 'Cancelled', 'Returned', 'Expired'],
     },
     globalOrderStatus: {
         type: String,
-        enum: ['PENDING', 'PLACED', 'PARTIALLY_SHIPPED', 'SHIPPED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'PARTIALLY_RETURNED', 'RETURNED', 'PARTIALLY_CANCELLED', 'PROCESSING', 'PARTIALLY_PROCESSING', 'CANCELLATION_REQUEST', 'RETURN_REQUEST'],
+        enum: ['PENDING', 'PLACED', 'PARTIALLY_SHIPPED', 'SHIPPED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'PARTIALLY_RETURNED', 'RETURNED', 'PARTIALLY_CANCELLED', 'PROCESSING', 'PARTIALLY_PROCESSING', 'CANCELLATION_REQUEST', 'RETURN_REQUEST', 'Expired'],
         default: 'PLACED'
     },
     razorpayPaymentId: { type: String },
@@ -159,7 +159,7 @@ const orderSchema = new Schema<IOrderDocument>({
             }
         },
         orderStatus: {
-            type: String, enum: ['Pending', 'Order Placed', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Cancellation Request', 'Return Request', 'Return', 'Returned'],
+            type: String, enum: ['Pending', 'Order Placed', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Cancellation Request', 'Return Request', 'Return', 'Returned', 'Expired'],
             default: 'Order Placed'
         },
         shippingDetails: {
@@ -209,6 +209,7 @@ const calculateGlobalStatusLogic = (products: IOrderedProduct[]) => {
     if (allEqual('Shipped')) { console.log("all shipped"); return 'SHIPPED' };
     if (allEqual('Processing')) return 'PROCESSING';
     if (allEqual('Order Placed')) return 'PLACED';
+    if (allEqual('Expired')) return 'Expired';
 
     // 2️⃣ All terminal but mixed
     const terminalStates = ['Delivered', 'Cancelled', 'Returned', 'Return'];

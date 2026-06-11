@@ -163,7 +163,7 @@ export class UserOrderController {
 
                     if (reqPerSet > 0) {
                         const usedQty = reqPerSet * applications;
-                        const price = Number(item.product.price) || 0;
+                        const price = Number(item.product?.price) || 0;
                         const usedMRP = roundTo2(price * usedQty);
                         actualUsedMRPTotal += usedMRP;
                         itemsToDistribute.push({ pId: pIdString, usedMRP });
@@ -191,9 +191,11 @@ export class UserOrderController {
                 )
             );
 
-            const orderedProducts = cart.products.map((item: any) => {
-                const p = item.product;
-                const originalPrice = p.price || 0;
+            const orderedProducts = cart.products
+                .filter((item: any) => item.product)
+                .map((item: any) => {
+                const p = item.product as any;
+                const originalPrice = Number(p?.price) || 0;
                 const totalQty = item.quantity || 1;
                 totalMRP += (originalPrice * totalQty);
                 const pIdString = p?._id?.toString();
@@ -229,8 +231,8 @@ export class UserOrderController {
                     let bestCategoryOffer: any = null;
                     
                     const applicableOffers = activeOffers.filter(offer =>
-                        (offer.offerFor === 'product' && offer.productId?.toString() === p._id.toString()) ||
-                        (offer.offerFor === 'category' && offer.categoryId?.toString() === p.categoryId.toString())
+                        (offer.offerFor === 'product' && offer.productId?.toString() === p._id?.toString()) ||
+                        (offer.offerFor === 'category' && offer.categoryId?.toString() === p.categoryId?.toString())
                     );
 
                     applicableOffers.forEach(offer => {
@@ -368,63 +370,108 @@ export class UserOrderController {
             if (appliedCouponName) summary += `Coupon: ${appliedCouponName} `;
             if (appliedReferralCode) summary += `Referral: ${appliedReferralCode} `;
 
-            // Create Unique Order ID: ORD + 12 unique digits
-            const random12 = Math.floor(Math.random() * 900000000000 + 100000000000).toString();
-            const orderId = `ORD${random12}`;
+            // Check for existing pending order before creating a new one
+            const targetPaymentMethod = isOnline ? 'Online' : (paymentMethod || 'COD');
+            const existingPendingOrder = await OrderModel.findOne({ 
+                userId, 
+                paymentStatus: { $in: ['Pending', 'Failed'] }, 
+                globalOrderStatus: 'PENDING',
+                paymentMethod: targetPaymentMethod
+            }).sort({ createdAt: -1 });
 
-            // Construct Order Object
-            const newOrder = new OrderModel({
-                orderId: orderId,
-                paymentMethod: isOnline ? 'Online' : (paymentMethod || 'COD'),
-                paymentStatus: 'Pending',
-                globalOrderStatus: isOnline ? 'PENDING' : 'PLACED',
-                statusHistory: [{
-                    status: isOnline ? 'Payment Pending' : 'Order Placed',
-                    timestamp: new Date(),
-                    updatedBy: 'Customer'
-                }],
-                address: {
-                    house: addressDoc.house || '',
-                    place: addressDoc.place || '',
-                    city: addressDoc.city || '',
-                    district: addressDoc.district || '',
-                    state: addressDoc.state || '',
-                    pincode: Number(addressDoc.pincode) || 0
-                },
-                deliveryCharge: deliveryCharge,
-                userId: userId,
-                totalMRP: totalMRP,
-                totalDiscount: finalDiscountAmount,
-                comboOffer: appliedComboOfferId,
-                comboOfferName: appliedComboOfferName,
-                totalAmount: totalAmount,
-                referralCode: appliedReferralCode,
-                referrerId: appliedReferralOwnerId,
-                coupon: appliedCouponId,
-                couponName: appliedCouponName,
-                hasComboOffer: hasComboOffer,
-                hasProductOffer: hasProductOfferFlag,
-                appliedOffersSummary: summary.trim(),
-                orderedProducts: orderedProducts
-            });
+            let useExistingOrder: any = null;
 
-            // Set placeholder for Razorpay logic block:
+            if (existingPendingOrder) {
+                const isSame = 
+                    existingPendingOrder.totalAmount === totalAmount &&
+                    existingPendingOrder.totalMRP === totalMRP &&
+                    existingPendingOrder.deliveryCharge === deliveryCharge &&
+                    existingPendingOrder.totalDiscount === finalDiscountAmount &&
+                    existingPendingOrder.address?.pincode === Number(addressDoc.pincode) &&
+                    existingPendingOrder.orderedProducts.length === orderedProducts.length &&
+                    existingPendingOrder.orderedProducts.every((ep: any) => {
+                        const newP = orderedProducts.find((np: any) => np.productId?.toString() === ep.productId?.toString());
+                        return newP && newP.quantity === ep.quantity && newP.finalPrice === ep.finalPrice;
+                    });
+
+                if (isSame) {
+                    useExistingOrder = existingPendingOrder;
+                    useExistingOrder.paymentStatus = 'Pending';
+                } else {
+                    existingPendingOrder.globalOrderStatus = 'CANCELLED';
+                    existingPendingOrder.paymentStatus = 'Failed';
+                    existingPendingOrder.statusHistory.push({
+                        status: 'Cancelled due to cart/address change on retry',
+                        timestamp: new Date(),
+                        updatedBy: 'System'
+                    });
+                    await existingPendingOrder.save();
+                }
+            }
+
+            let newOrder: any = useExistingOrder;
+
+            if (!newOrder) {
+                // Create Unique Order ID: ORD + 12 unique digits
+                const random12 = Math.floor(Math.random() * 900000000000 + 100000000000).toString();
+                const orderId = `ORD${random12}`;
+
+                // Construct Order Object
+                newOrder = new OrderModel({
+                    orderId: orderId,
+                    paymentMethod: targetPaymentMethod,
+                    paymentStatus: 'Pending',
+                    globalOrderStatus: isOnline ? 'PENDING' : 'PLACED',
+                    statusHistory: [{
+                        status: isOnline ? 'Payment Pending' : 'Order Placed',
+                        timestamp: new Date(),
+                        updatedBy: 'Customer'
+                    }],
+                    address: {
+                        house: addressDoc.house || '',
+                        place: addressDoc.place || '',
+                        city: addressDoc.city || '',
+                        district: addressDoc.district || '',
+                        state: addressDoc.state || '',
+                        pincode: Number(addressDoc.pincode) || 0
+                    },
+                    deliveryCharge: deliveryCharge,
+                    userId: userId,
+                    totalMRP: totalMRP,
+                    totalDiscount: finalDiscountAmount,
+                    comboOffer: appliedComboOfferId,
+                    comboOfferName: appliedComboOfferName,
+                    totalAmount: totalAmount,
+                    referralCode: appliedReferralCode,
+                    referrerId: appliedReferralOwnerId,
+                    coupon: appliedCouponId,
+                    couponName: appliedCouponName,
+                    hasComboOffer: hasComboOffer,
+                    hasProductOffer: hasProductOfferFlag,
+                    appliedOffersSummary: summary.trim(),
+                    orderedProducts: orderedProducts
+                });
+            }
+
             // Handle Online Payment Initiation
             if (isOnline) {
-                console.log("yes it is razorpay")
-                const razorpayOrder = await this.razorpayService.createOrder(totalAmount, orderId);
+                const razorpayOrder = await this.razorpayService.createOrder(totalAmount, newOrder.orderId);
+                console.log(razorpayOrder, "razorpay order  testforpayment")
                 newOrder.razorpayOrderId = razorpayOrder.id;
             }
 
             await newOrder.save();
 
-            // Clear Cart after successful generic order creation (COD or Online initiation)
-            cart.products = [];
-            await cart.save();
-console.log(newOrder.razorpayOrderId,"new order razorpayid")
+            // Clear Cart after successful generic order creation if COD. 
+            // Online orders clear it upon successful verification to allow retry.
+            if (!isOnline) {
+                cart.products = [];
+                await cart.save();
+            }
+
             res.status(200).json({
                 success: true,
-                message: isOnline ? 'Payment initiated' : 'Order placed successfully',
+                message: isOnline ? (useExistingOrder ? 'Payment initiated (Retry)' : 'Payment initiated') : 'Order placed successfully',
                 data: {
                     order: newOrder,
                     razorpayOrderId: newOrder.razorpayOrderId,
@@ -516,6 +563,13 @@ console.log(razorpaySignature,"razorpaySignature")
 
                 await order.save();
 
+                // Clear cart after successful online payment
+                const cart = await CartModel.findOne({ user: order.userId, isActive: true });
+                if (cart) {
+                    cart.products = [];
+                    await cart.save();
+                }
+
                 res.status(200).json({
                     success: true,
                     message: "Payment verified successfully",
@@ -576,6 +630,13 @@ console.log(razorpaySignature,"razorpaySignature")
                     });
 
                     await order.save();
+
+                    // Clear cart
+                    const cart = await CartModel.findOne({ user: order.userId, isActive: true });
+                    if (cart) {
+                        cart.products = [];
+                        await cart.save();
+                    }
                 }
             } else if (event === 'payment.failed') {
                 const entity = payload.payment.entity;

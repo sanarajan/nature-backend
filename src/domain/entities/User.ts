@@ -15,6 +15,8 @@ export class User {
         public readonly referredBy?: string,
         public readonly addresses: any[] = [],
         public readonly createdAt: Date = new Date(),
-        public readonly updatedAt: Date = new Date()
+        public readonly updatedAt: Date = new Date(),
+        public readonly isInfluencer: boolean = false,
+        public readonly influencerCode?: string
     ) { }
 }

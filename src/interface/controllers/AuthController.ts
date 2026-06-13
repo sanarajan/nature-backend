@@ -168,7 +168,8 @@ export class AuthController {
                 return;
             }
 
-            const { password: _, ...userWithoutPassword } = fullUser as any;
+            const userObj = (fullUser as any).toObject ? (fullUser as any).toObject() : fullUser;
+            const { password: _, ...userWithoutPassword } = userObj;
 
             res.status(200).json({
                 success: true,

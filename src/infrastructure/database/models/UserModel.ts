@@ -19,6 +19,7 @@ export interface IUserDocument extends Document {
     role: UserRole; // Keeping for backward compatibility with domain entities
     
     // Influencer Specific Fields
+    isInfluencer?: boolean;
     influencerCode?: string;
     commissionPercentage?: number;
     influencerWalletBalance?: number;
@@ -48,6 +49,7 @@ const userSchema = new Schema<IUserDocument>({
     role: { type: String, enum: Object.values(UserRole), default: UserRole.USER }, // Keep for backward compatibility
     
     // Influencer Specific Fields
+    isInfluencer: { type: Boolean, default: false },
     influencerCode: { type: String, unique: true, sparse: true },
     commissionPercentage: { type: Number, default: 0 },
     influencerWalletBalance: { type: Number, default: 0 },

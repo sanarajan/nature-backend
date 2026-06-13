@@ -79,14 +79,14 @@ export class InfluencerController {
             const user = await UserModel.findById(userId);
 
             if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-            if (user.role === UserRole.INFLUENCER) return res.status(400).json({ success: false, message: 'Already an influencer' });
+            if (user.isInfluencer) return res.status(400).json({ success: false, message: 'Already an influencer' });
 
             // Generate unique influencer code
             const baseCode = (user.displayName || user.username || 'INF').substring(0, 4).toUpperCase();
             const uniqueSuffix = Math.floor(1000 + Math.random() * 9000).toString();
             const influencerCode = `${baseCode}${uniqueSuffix}`;
 
-            user.role = UserRole.INFLUENCER;
+            user.isInfluencer = true;
             user.influencerCode = influencerCode;
             user.commissionPercentage = 5; // Default 5%
             user.influencerStatus = 'Active';

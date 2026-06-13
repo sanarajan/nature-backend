@@ -132,10 +132,19 @@ export class AuthController {
 
         try {
             const decoded = await this.authService.verifyRefreshToken(refreshToken);
+            
+            // Fetch the user from the database to ensure we have the latest role and isInfluencer
+            const user = await this.userRepository.findById(decoded.id);
+            if (!user) {
+                res.status(401).json({ success: false, message: 'User not found' });
+                return;
+            }
+
             const { accessToken } = this.authService.generateTokens({
-                id: decoded.id,
-                email: decoded.email,
-                role: decoded.role
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                isInfluencer: user.isInfluencer
             });
 
             res.cookie(`${prefix}jwt`, accessToken, {
@@ -149,7 +158,7 @@ export class AuthController {
                 success: true,
                 data: {
                     accessToken,
-                    role: decoded.role
+                    role: user.role
                 },
             });
         } catch (error: any) {

@@ -31,7 +31,7 @@ export class LoginUseCase implements ILoginUseCase {
             throw new Error(ErrorMessages.INVALID_CREDENTIALS);
         }
 
-        const payload = { id: user.id, email: user.email, role: user.role };
+        const payload = { id: user.id, email: user.email, role: user.role, isInfluencer: user.isInfluencer };
         const accessToken = this.jwtService.generateAccessToken(payload);
         const refreshToken = this.jwtService.generateRefreshToken(payload);
 

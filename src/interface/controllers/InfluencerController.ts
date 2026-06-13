@@ -79,7 +79,9 @@ export class InfluencerController {
             const user = await UserModel.findById(userId);
 
             if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-            if (user.isInfluencer) return res.status(400).json({ success: false, message: 'Already an influencer' });
+            if (user.isInfluencer) {
+                return res.status(200).json({ success: true, message: 'Already an influencer', data: { user } });
+            }
 
             // Generate unique influencer code
             const baseCode = (user.displayName || user.username || 'INF').substring(0, 4).toUpperCase();

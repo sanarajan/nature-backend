@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { OrderModel } from '../../infrastructure/database/models/OrderModel';
+import { UserModel } from '../../infrastructure/database/models/UserModel';
 import { container } from '../../infrastructure/config/container';
 import { EmailService } from '../../infrastructure/services/EmailService';
 
@@ -167,6 +168,27 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
             if (allFinished && anyDelivered) {
                 order.paymentStatus = 'Completed';
+            }
+        }
+
+        // Influencer Commission Tracking Hook
+        if (order.influencerId && order.influencerCommissionStatus === 'PENDING') {
+            if (order.globalOrderStatus === 'DELIVERED' && !order.deliveredAt) {
+                order.deliveredAt = new Date();
+                const returnExpiry = new Date(order.deliveredAt.getTime());
+                returnExpiry.setDate(returnExpiry.getDate() + 7);
+                order.returnExpiryDate = returnExpiry;
+            } else if (['CANCELLED', 'RETURNED', 'Expired'].includes(order.globalOrderStatus)) {
+                order.influencerCommissionStatus = 'CANCELLED';
+                
+                // Atomically deduct the pending balance
+                if (order.influencerCommissionAmount) {
+                    const influencer = await UserModel.findById(order.influencerId);
+                    if (influencer) {
+                        influencer.influencerPendingBalance = Math.max(0, (influencer.influencerPendingBalance || 0) - order.influencerCommissionAmount);
+                        await influencer.save();
+                    }
+                }
             }
         }
 

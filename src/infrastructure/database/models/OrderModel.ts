@@ -81,6 +81,17 @@ export interface IOrderDocument extends Document {
     cancelledAmount: number;
     returnedAmount: number;
     refundedAmount: number;
+    
+    // Influencer Attribution
+    influencerId?: mongoose.Types.ObjectId;
+    influencerCode?: string;
+    influencerCommissionAmount?: number;
+    influencerCommissionStatus?: 'PENDING' | 'APPROVED' | 'CANCELLED' | 'EXPIRED';
+    
+    // Delivery and Return Tracking
+    deliveredAt?: Date;
+    returnExpiryDate?: Date;
+    
     createdAt: Date;
     updatedAt: Date;
     calculateGlobalOrderStatus(): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired';
@@ -181,7 +192,21 @@ const orderSchema = new Schema<IOrderDocument>({
     }],
     cancelledAmount: { type: Number, default: 0 },
     returnedAmount: { type: Number, default: 0 },
-    refundedAmount: { type: Number, default: 0 }
+    refundedAmount: { type: Number, default: 0 },
+
+    // Influencer Attribution
+    influencerId: { type: Schema.Types.ObjectId, ref: 'User' },
+    influencerCode: { type: String },
+    influencerCommissionAmount: { type: Number },
+    influencerCommissionStatus: { 
+        type: String, 
+        enum: ['PENDING', 'APPROVED', 'CANCELLED', 'EXPIRED']
+    },
+    
+    // Delivery and Return Tracking
+    deliveredAt: { type: Date },
+    returnExpiryDate: { type: Date }
+
 }, { timestamps: true });
 
 // Standalone calculation function for maximum reliability

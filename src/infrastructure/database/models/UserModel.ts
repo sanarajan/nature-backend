@@ -17,6 +17,16 @@ export interface IUserDocument extends Document {
     referralId?: string;
     referredBy?: mongoose.Types.ObjectId; // User who referred this user
     role: UserRole; // Keeping for backward compatibility with domain entities
+    
+    // Influencer Specific Fields
+    influencerCode?: string;
+    commissionPercentage?: number;
+    influencerWalletBalance?: number;
+    influencerPendingBalance?: number;
+    influencerTotalEarned?: number;
+    influencerTotalWithdrawn?: number;
+    influencerStatus?: 'Active' | 'Inactive';
+    
     createdAt: Date;
     updatedAt: Date;
 }
@@ -35,7 +45,16 @@ const userSchema = new Schema<IUserDocument>({
     address_ids: [{ type: Schema.Types.ObjectId, ref: 'Address' }],
     referralId: { type: String, unique: true, sparse: true },
     referredBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    role: { type: String, enum: Object.values(UserRole), default: UserRole.USER } // Keep for backward compatibility
+    role: { type: String, enum: Object.values(UserRole), default: UserRole.USER }, // Keep for backward compatibility
+    
+    // Influencer Specific Fields
+    influencerCode: { type: String, unique: true, sparse: true },
+    commissionPercentage: { type: Number, default: 0 },
+    influencerWalletBalance: { type: Number, default: 0 },
+    influencerPendingBalance: { type: Number, default: 0 },
+    influencerTotalEarned: { type: Number, default: 0 },
+    influencerTotalWithdrawn: { type: Number, default: 0 },
+    influencerStatus: { type: String, enum: ['Active', 'Inactive'], default: 'Active' }
 }, { timestamps: true });
 
 // Hash password before saving

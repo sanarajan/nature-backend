@@ -26,6 +26,7 @@ export class UserOrderController {
             console.log("place order entry")
             const userId = (req as any).user.id;
             const { addressId, paymentMethod, isOnline, referralCode, couponCode } = req.body;
+            const influencerRef = req.cookies?.influencer_ref || req.body.influencerRef;
 
             // Fetch Cart
             const cart = await CartModel.findOne({ user: userId, isActive: true })
@@ -431,6 +432,34 @@ export class UserOrderController {
             }
 
             let newOrder: any = useExistingOrder;
+            
+            // Handle Influencer Referral Logic
+            let influencerId: any = null;
+            let influencerCode: any = null;
+            let influencerCommissionAmount = 0;
+            let influencerCommissionStatus: any = null;
+            
+            if (!newOrder && influencerRef) {
+                const influencer = await UserModel.findOne({ influencerCode: influencerRef, influencerStatus: 'Active' });
+                if (influencer && influencer._id.toString() !== userId) {
+                    influencerId = influencer._id;
+                    influencerCode = influencer.influencerCode;
+                    const commissionBase = Math.max(0, totalAmount - deliveryCharge);
+                    influencerCommissionAmount = (commissionBase * (influencer.commissionPercentage || 0)) / 100;
+                    if (influencerCommissionAmount > 0) {
+                        influencerCommissionStatus = 'PENDING';
+                        
+                        // Atomically increment pending balance
+                        influencer.influencerPendingBalance = (influencer.influencerPendingBalance || 0) + influencerCommissionAmount;
+                        await influencer.save();
+                    } else {
+                        // Reset if no amount generated
+                        influencerId = null;
+                        influencerCode = null;
+                        influencerCommissionStatus = null;
+                    }
+                }
+            }
 
             if (!newOrder) {
                 // Create Unique Order ID: ORD + 12 unique digits
@@ -470,7 +499,11 @@ export class UserOrderController {
                     hasComboOffer: hasComboOffer,
                     hasProductOffer: hasProductOfferFlag,
                     appliedOffersSummary: summary.trim(),
-                    orderedProducts: orderedProducts
+                    orderedProducts: orderedProducts,
+                    influencerId: influencerId,
+                    influencerCode: influencerCode,
+                    influencerCommissionAmount: influencerCommissionAmount,
+                    influencerCommissionStatus: influencerCommissionStatus
                 });
             }
 

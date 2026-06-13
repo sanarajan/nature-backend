@@ -7,7 +7,7 @@ import { UserRole } from '../../constants/enums/UserRole';
 export class AdminInfluencerController {
     public static async getAllInfluencers(req: Request, res: Response) {
         try {
-            const influencers = await UserModel.find({ role: UserRole.INFLUENCER }).sort({ createdAt: -1 });
+            const influencers = await UserModel.find({ isInfluencer: true }).sort({ createdAt: -1 });
             res.status(200).json({ success: true, data: influencers });
         } catch (error: any) {
             res.status(500).json({ success: false, message: error.message });

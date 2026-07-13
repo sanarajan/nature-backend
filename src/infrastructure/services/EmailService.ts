@@ -92,7 +92,15 @@ export class EmailService implements IEmailService {
         }
     }
 
-    async sendShippingEmail(email: string, orderId: string, productName: string, agencyName: string, trackingNumber: string, trackingUrl: string): Promise<void> {
+    async sendShippingEmail(email: string, orderId: string, productName: string, agencyName: string, trackingNumber: string, trackingUrl?: string): Promise<void> {
+        const trackingHtml = trackingUrl ? `
+            <p>You can track your package using the link below:</p>
+            <a href="${trackingUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Track Your Order</a>
+            
+            <p style="margin-top: 20px;">Or copy and paste this link into your browser:<br/>
+            <a href="${trackingUrl}">${trackingUrl}</a></p>
+        ` : `<p>Your package is on its way. Please contact the shipping agency for more details.</p>`;
+
         const mailOptions = {
             from: process.env.EMAIL_FROM || 'noreply@nature.com',
             to: email,
@@ -109,11 +117,7 @@ export class EmailService implements IEmailService {
                         <p style="margin: 5px 0 0 0;"><strong>Tracking Number:</strong> ${trackingNumber}</p>
                     </div>
 
-                    <p>You can track your package using the link below:</p>
-                    <a href="${trackingUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Track Your Order</a>
-                    
-                    <p style="margin-top: 20px;">Or copy and paste this link into your browser:<br/>
-                    <a href="${trackingUrl}">${trackingUrl}</a></p>
+                    ${trackingHtml}
                     
                     <p>Thank you for shopping with Naturalayam!</p>
                 </div>

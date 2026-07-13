@@ -1,61 +1,55 @@
-import { Request, Response } from 'express';
-import { ShippingChargeModel } from '../../infrastructure/database/models/ShippingChargeModel';
-import { StateModel } from '../../infrastructure/database/models/StateModel';
+import { Request, Response, NextFunction } from 'express';
+import { injectable, inject } from 'tsyringe';
+import {
+    GetShippingChargesUseCase,
+    AddOrUpdateShippingChargeUseCase,
+    DeleteShippingChargeUseCase,
+    GetStatesUseCase
+} from '../../application/usecases/admin/AdminShippingChargeUseCases';
 
+@injectable()
 export class AdminShippingChargeController {
-    public async getShippingCharges(req: Request, res: Response): Promise<void> {
+    constructor(
+        @inject('IGetShippingChargesUseCase') private getShippingChargesUseCase: GetShippingChargesUseCase,
+        @inject('IAddOrUpdateShippingChargeUseCase') private addOrUpdateShippingChargeUseCase: AddOrUpdateShippingChargeUseCase,
+        @inject('IDeleteShippingChargeUseCase') private deleteShippingChargeUseCase: DeleteShippingChargeUseCase,
+        @inject('IGetStatesUseCase') private getStatesUseCase: GetStatesUseCase
+    ) {}
+
+    getShippingCharges = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const charges = await ShippingChargeModel.find().populate('stateId').sort({ state: 1 });
+            const charges = await this.getShippingChargesUseCase.execute();
             res.status(200).json({ success: true, data: charges });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message });
+            next(error);
         }
-    }
+    };
 
-    public async addOrUpdateShippingCharge(req: Request, res: Response): Promise<void> {
+    addOrUpdateShippingCharge = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { state, stateId, charge, isActive } = req.body;
-
-            // Look for existing state entry by stateId
-            let shippingCharge = await ShippingChargeModel.findOne({ stateId });
-
-            if (shippingCharge) {
-                shippingCharge.state = state;
-                shippingCharge.charge = charge;
-                shippingCharge.isActive = isActive !== undefined ? isActive : true;
-                await shippingCharge.save();
-            } else {
-                shippingCharge = new ShippingChargeModel({
-                    state,
-                    stateId,
-                    charge,
-                    isActive: isActive !== undefined ? isActive : true
-                });
-                await shippingCharge.save();
-            }
-
+            const shippingCharge = await this.addOrUpdateShippingChargeUseCase.execute(req.body);
             res.status(200).json({ success: true, message: 'Shipping charge updated successfully', data: shippingCharge });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message });
+            next(error);
         }
-    }
+    };
 
-    public async deleteShippingCharge(req: Request, res: Response): Promise<void> {
+    deleteShippingCharge = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { id } = req.params;
-            await ShippingChargeModel.findByIdAndDelete(id);
+            const id = req.params.id as string;
+            await this.deleteShippingChargeUseCase.execute(id);
             res.status(200).json({ success: true, message: 'Shipping charge deleted' });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message });
+            next(error);
         }
-    }
+    };
 
-    public async getStates(req: Request, res: Response): Promise<void> {
+    getStates = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const states = await StateModel.find({ isActive: true }).sort({ name: 1 });
+            const states = await this.getStatesUseCase.execute();
             res.status(200).json({ success: true, data: states });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message });
+            next(error);
         }
-    }
+    };
 }

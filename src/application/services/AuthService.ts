@@ -1,6 +1,6 @@
 import { inject, injectable } from 'tsyringe';
 import { IJwtService } from '../../domain/services/IJwtService';
-import { IAuthService } from '../interfaces/IAuthService';
+import { IAuthService } from '../interfaces/auth/IAuthService';
 
 @injectable()
 export class AuthService implements IAuthService {

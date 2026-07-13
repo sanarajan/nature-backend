@@ -1,14 +1,15 @@
 import { Router } from 'express';
+import { container } from '../../../infrastructure/config/container';
 import { AdminOfferController } from '../../controllers/AdminOfferController';
 import { adminAuthProtect } from '../../../middleware/adminAuthMiddleware';
 
 const router = Router();
-const controller = new AdminOfferController();
+const controller = container.resolve(AdminOfferController);
 
-router.post('/', adminAuthProtect, (req, res) => controller.createOffer(req, res));
-router.get('/', adminAuthProtect, (req, res) => controller.getOffers(req, res));
-router.put('/:id', adminAuthProtect, (req, res) => controller.updateOffer(req, res));
-router.delete('/:id', adminAuthProtect, (req, res) => controller.deleteOffer(req, res));
-router.patch('/:id/toggle', adminAuthProtect, (req, res) => controller.toggleStatus(req, res));
+router.post('/', adminAuthProtect, (req, res, next) => controller.createOffer(req, res, next));
+router.get('/', adminAuthProtect, (req, res, next) => controller.getOffers(req, res, next));
+router.put('/:id', adminAuthProtect, (req, res, next) => controller.updateOffer(req, res, next));
+router.delete('/:id', adminAuthProtect, (req, res, next) => controller.deleteOffer(req, res, next));
+router.patch('/:id/toggle', adminAuthProtect, (req, res, next) => controller.toggleStatus(req, res, next));
 
 export default router;

@@ -1,97 +1,64 @@
 import { Request, Response } from 'express';
-import { WishlistModel } from '../../infrastructure/database/models/WishlistModel';
-import mongoose from 'mongoose';
+import { inject, injectable } from 'tsyringe';
+import {
+    IToggleWishlistUseCase,
+    IGetWishlistUseCase,
+    ISyncWishlistUseCase
+} from '../../application/interfaces/user/IWishlistUseCases';
+import { STATUS_CODES } from '../../shared/constants/statusCodes';
 
-export const toggleWishlist = async (req: Request, res: Response) => {
-    try {
-        const userId = (req as any).user.id;
-        const { productId } = req.body;
+@injectable()
+export class WishlistController {
+    constructor(
+        @inject('IToggleWishlistUseCase') private toggleWishlistUseCase: IToggleWishlistUseCase,
+        @inject('IGetWishlistUseCase') private getWishlistUseCase: IGetWishlistUseCase,
+        @inject('ISyncWishlistUseCase') private syncWishlistUseCase: ISyncWishlistUseCase
+    ) {}
 
-        console.log('Toggle Wishlist Request:', { userId, productId });
+    async toggleWishlist(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = (req as any).user.id;
+            const { productId } = req.body;
 
-        if (!productId) {
-            console.log('Wishlist toggle failed: Product ID missing');
-            res.status(400).json({ success: false, message: 'Product ID is required' });
-            return;
-        }
+            const result = await this.toggleWishlistUseCase.execute(userId, productId);
+            const message = result.action === 'added' ? 'Added to wishlist' : 'Removed from wishlist';
+            const statusCode = result.action === 'added' ? STATUS_CODES.CREATED : STATUS_CODES.OK;
 
-        if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(productId)) {
-            console.log('Wishlist toggle failed: Invalid IDs', { userId, productId });
-            res.status(400).json({ success: false, message: 'Invalid User or Product ID' });
-            return;
-        }
-
-        const userObjectId = new mongoose.Types.ObjectId(userId);
-        const productObjectId = new mongoose.Types.ObjectId(productId);
-
-        const existingItem = await WishlistModel.findOne({ user: userObjectId, products: productObjectId });
-
-        if (existingItem) {
-            await WishlistModel.deleteOne({ _id: existingItem._id });
-            res.status(200).json({ success: true, message: 'Removed from wishlist', action: 'removed' });
-        } else {
-            const newItem = new WishlistModel({
-                user: userObjectId,
-                products: productObjectId
+            res.status(statusCode).json({ success: true, message, action: result.action });
+        } catch (error: any) {
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ 
+                success: false, 
+                message: error.message || 'Server error toggling wishlist' 
             });
-            await newItem.save();
-            res.status(201).json({ success: true, message: 'Added to wishlist', action: 'added' });
         }
-    } catch (error: any) {
-        console.error('Wishlist toggle error:', error);
-        res.status(500).json({ success: false, message: error.message || 'Server error toggling wishlist' });
     }
-};
 
-export const getWishlist = async (req: Request, res: Response) => {
-    try {
-        const userId = (req as any).user.id;
-
-        const wishlist = await WishlistModel.find({ user: userId })
-            .populate({
-                path: 'products',
-                populate: [
-                    { path: 'categoryId', select: 'categoryName' },
-                    { path: 'subcategoryId', select: 'subcategoryName' }
-                ]
+    async getWishlist(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = (req as any).user.id;
+            const products = await this.getWishlistUseCase.execute(userId);
+            
+            res.status(STATUS_CODES.OK).json({ success: true, data: products });
+        } catch (error: any) {
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ 
+                success: false, 
+                message: error.message || 'Server error fetching wishlist' 
             });
-
-        // Flatten the response to return an array of products
-        const products = wishlist.map(item => item.products);
-
-        res.status(200).json({
-            success: true,
-            data: products
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message || 'Server error fetching wishlist' });
-    }
-};
-
-export const syncWishlist = async (req: Request, res: Response) => {
-    try {
-        const userId = (req as any).user.id;
-        const { productIds } = req.body; // Array of product ids
-
-        if (!productIds || !Array.isArray(productIds)) {
-            res.status(400).json({ success: false, message: 'productIds array is required' });
-            return;
         }
-
-        const userObjectId = new mongoose.Types.ObjectId(userId);
-
-        for (const pid of productIds) {
-            if (mongoose.Types.ObjectId.isValid(pid)) {
-                const productObjectId = new mongoose.Types.ObjectId(pid);
-                const exists = await WishlistModel.findOne({ user: userObjectId, products: productObjectId });
-                if (!exists) {
-                    await new WishlistModel({ user: userObjectId, products: productObjectId }).save();
-                }
-            }
-        }
-
-        res.status(200).json({ success: true, message: 'Wishlist synced' });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message || 'Server error syncing wishlist' });
     }
-};
+
+    async syncWishlist(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = (req as any).user.id;
+            const { productIds } = req.body;
+
+            await this.syncWishlistUseCase.execute(userId, productIds);
+            res.status(STATUS_CODES.OK).json({ success: true, message: 'Wishlist synced' });
+        } catch (error: any) {
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ 
+                success: false, 
+                message: error.message || 'Server error syncing wishlist' 
+            });
+        }
+    }
+}

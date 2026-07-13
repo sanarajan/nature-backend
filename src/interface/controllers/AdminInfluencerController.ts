@@ -1,97 +1,70 @@
 import { Request, Response } from 'express';
-import { UserModel } from '../../infrastructure/database/models/UserModel';
-import { OrderModel } from '../../infrastructure/database/models/OrderModel';
-import { WithdrawalRequestModel } from '../../infrastructure/database/models/WithdrawalRequestModel';
-import { UserRole } from '../../constants/enums/UserRole';
+import { inject, injectable } from 'tsyringe';
+import {
+    IGetAllInfluencersUseCase,
+    IGetInfluencerStatsUseCase,
+    IUpdateInfluencerUseCase,
+    IGetWithdrawalRequestsUseCase,
+    IProcessWithdrawalUseCase
+} from '../../application/interfaces/admin/IAdminInfluencerUseCases';
+import { STATUS_CODES } from '../../shared/constants/statusCodes';
 
+@injectable()
 export class AdminInfluencerController {
-    public static async getAllInfluencers(req: Request, res: Response) {
+    constructor(
+        @inject('IGetAllInfluencersUseCase') private getAllInfluencersUseCase: IGetAllInfluencersUseCase,
+        @inject('IGetInfluencerStatsUseCase') private getInfluencerStatsUseCase: IGetInfluencerStatsUseCase,
+        @inject('IUpdateInfluencerUseCase') private updateInfluencerUseCase: IUpdateInfluencerUseCase,
+        @inject('IGetWithdrawalRequestsUseCase') private getWithdrawalRequestsUseCase: IGetWithdrawalRequestsUseCase,
+        @inject('IProcessWithdrawalUseCase') private processWithdrawalUseCase: IProcessWithdrawalUseCase
+    ) {}
+
+    async getAllInfluencers(req: Request, res: Response): Promise<void> {
         try {
-            const influencers = await UserModel.find({ isInfluencer: true }).sort({ createdAt: -1 });
-            res.status(200).json({ success: true, data: influencers });
+            const influencers = await this.getAllInfluencersUseCase.execute();
+            res.status(STATUS_CODES.OK).json({ success: true, data: influencers });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message });
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }
     }
 
-    public static async getInfluencerStats(req: Request, res: Response) {
+    async getInfluencerStats(req: Request, res: Response): Promise<void> {
         try {
-            const { id } = req.params;
-            const influencer = await UserModel.findById(id);
-            if (!influencer) return res.status(404).json({ success: false, message: 'Influencer not found' });
-
-            const totalOrders = await OrderModel.countDocuments({ influencerId: id });
-            const completedOrders = await OrderModel.find({ influencerId: id, influencerCommissionStatus: 'APPROVED' });
-            
-            const totalSales = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-
-            res.status(200).json({
-                success: true,
-                data: {
-                    influencer,
-                    totalOrders,
-                    totalSales
-                }
-            });
+            const id = req.params.id as string;
+            const data = await this.getInfluencerStatsUseCase.execute(id);
+            res.status(STATUS_CODES.OK).json({ success: true, data });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message });
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }
     }
 
-    public static async updateInfluencer(req: Request, res: Response) {
+    async updateInfluencer(req: Request, res: Response): Promise<void> {
         try {
-            const { id } = req.params;
-            const { displayName, email, phoneNumber, commissionPercentage, influencerStatus } = req.body;
-            
-            const influencer = await UserModel.findByIdAndUpdate(id, {
-                displayName, email, phoneNumber, commissionPercentage, influencerStatus
-            }, { new: true });
-            
-            res.status(200).json({ success: true, data: influencer });
+            const id = req.params.id as string;
+            const data = await this.updateInfluencerUseCase.execute(id, req.body);
+            res.status(STATUS_CODES.OK).json({ success: true, data });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message });
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }
     }
 
-    public static async getWithdrawalRequests(req: Request, res: Response) {
+    async getWithdrawalRequests(req: Request, res: Response): Promise<void> {
         try {
-            const requests = await WithdrawalRequestModel.find()
-                .populate({ path: 'influencerId', select: 'displayName email influencerCode influencerWalletBalance' })
-                .sort({ createdAt: -1 });
-            res.status(200).json({ success: true, data: requests });
+            const requests = await this.getWithdrawalRequestsUseCase.execute();
+            res.status(STATUS_CODES.OK).json({ success: true, data: requests });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message });
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }
     }
 
-    public static async processWithdrawal(req: Request, res: Response) {
+    async processWithdrawal(req: Request, res: Response): Promise<void> {
         try {
-            const { id } = req.params;
+            const id = req.params.id as string;
             const { status, remarks } = req.body;
-
-            const request = await WithdrawalRequestModel.findById(id).populate('influencerId');
-            if (!request) return res.status(404).json({ success: false, message: 'Request not found' });
-            if (request.status !== 'Pending') return res.status(400).json({ success: false, message: 'Already processed' });
-
-            const influencer: any = request.influencerId;
-
-            if (status === 'Approved') {
-                if (influencer.influencerWalletBalance < request.amount) {
-                    return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
-                }
-                influencer.influencerWalletBalance -= request.amount;
-                influencer.influencerTotalWithdrawn = (influencer.influencerTotalWithdrawn || 0) + request.amount;
-                await influencer.save();
-            }
-
-            request.status = status;
-            request.adminRemarks = remarks;
-            request.processedAt = new Date();
-            await request.save();
-
-            res.status(200).json({ success: true, data: request });
+            const request = await this.processWithdrawalUseCase.execute(id, status, remarks);
+            res.status(STATUS_CODES.OK).json({ success: true, data: request });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message });
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }
     }
 }

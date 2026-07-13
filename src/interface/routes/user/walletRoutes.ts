@@ -1,5 +1,5 @@
 import express from 'express';
-import { container } from 'tsyringe';
+import { container } from '../../../infrastructure/config/container';
 import { WalletController } from '../../controllers/WalletController';
 import { userAuthProtect } from '../../../middleware/userAuthMiddleware';
 

@@ -23,6 +23,14 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
         return userDoc ? this.mapToEntity(userDoc) : null;
     }
 
+    async findInfluencers(): Promise<any[]> {
+        return UserModel.find({ isInfluencer: true }).sort({ createdAt: -1 }).exec();
+    }
+
+    async findByIdAndUpdate(id: string, data: any): Promise<any | null> {
+        return UserModel.findByIdAndUpdate(id, data, { new: true }).exec();
+    }
+
     protected mapToEntity(userDoc: IUserDocument): User {
         return new User(
             userDoc._id.toString(),

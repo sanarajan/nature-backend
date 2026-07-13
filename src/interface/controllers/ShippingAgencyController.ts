@@ -1,49 +1,51 @@
-import { Request, Response } from 'express';
-import { ShippingAgencyModel } from '../../infrastructure/database/models/ShippingAgencyModel';
+import { Request, Response, NextFunction } from 'express';
+import { injectable, inject } from 'tsyringe';
+import { AddShippingAgencyUseCase, GetAllShippingAgenciesUseCase, UpdateShippingAgencyUseCase, DeleteShippingAgencyUseCase } from '../../application/usecases/admin/ShippingAgencyUseCases';
 
-export const addShippingAgency = async (req: Request, res: Response) => {
-    try {
-        const { name, trackingUrlTemplate } = req.body;
-        const newAgency = new ShippingAgencyModel({ name, trackingUrlTemplate });
-        await newAgency.save();
-        res.status(201).json({ success: true, message: 'Shipping agency added successfully', data: newAgency });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message || 'Error adding shipping agency' });
-    }
-};
+@injectable()
+export class ShippingAgencyController {
+    constructor(
+        @inject('IAddShippingAgencyUseCase') private addShippingAgencyUseCase: AddShippingAgencyUseCase,
+        @inject('IGetAllShippingAgenciesUseCase') private getAllShippingAgenciesUseCase: GetAllShippingAgenciesUseCase,
+        @inject('IUpdateShippingAgencyUseCase') private updateShippingAgencyUseCase: UpdateShippingAgencyUseCase,
+        @inject('IDeleteShippingAgencyUseCase') private deleteShippingAgencyUseCase: DeleteShippingAgencyUseCase
+    ) {}
 
-export const getAllShippingAgencies = async (req: Request, res: Response) => {
-    try {
-        const agencies = await ShippingAgencyModel.find().sort({ createdAt: -1 });
-        res.status(200).json({ success: true, data: agencies });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message || 'Error fetching shipping agencies' });
-    }
-};
-
-export const updateShippingAgency = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const { name, trackingUrlTemplate, isActive } = req.body;
-        const agency = await ShippingAgencyModel.findByIdAndUpdate(id, { name, trackingUrlTemplate, isActive }, { new: true });
-        if (!agency) {
-            return res.status(404).json({ success: false, message: 'Shipping agency not found' });
+    addShippingAgency = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const newAgency = await this.addShippingAgencyUseCase.execute(req.body);
+            res.status(201).json({ success: true, message: 'Shipping agency added successfully', data: newAgency });
+        } catch (error: any) {
+            next(error);
         }
-        res.status(200).json({ success: true, message: 'Shipping agency updated successfully', data: agency });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message || 'Error updating shipping agency' });
-    }
-};
+    };
 
-export const deleteShippingAgency = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const agency = await ShippingAgencyModel.findByIdAndDelete(id);
-        if (!agency) {
-            return res.status(404).json({ success: false, message: 'Shipping agency not found' });
+    getAllShippingAgencies = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const agencies = await this.getAllShippingAgenciesUseCase.execute();
+            res.status(200).json({ success: true, data: agencies });
+        } catch (error: any) {
+            next(error);
         }
-        res.status(200).json({ success: true, message: 'Shipping agency deleted successfully' });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message || 'Error deleting shipping agency' });
-    }
-};
+    };
+
+    updateShippingAgency = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const id = req.params.id as string;
+            const agency = await this.updateShippingAgencyUseCase.execute(id, req.body);
+            res.status(200).json({ success: true, message: 'Shipping agency updated successfully', data: agency });
+        } catch (error: any) {
+            next(error);
+        }
+    };
+
+    deleteShippingAgency = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const id = req.params.id as string;
+            await this.deleteShippingAgencyUseCase.execute(id);
+            res.status(200).json({ success: true, message: 'Shipping agency deleted successfully' });
+        } catch (error: any) {
+            next(error);
+        }
+    };
+}

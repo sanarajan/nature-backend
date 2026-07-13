@@ -1,10 +1,10 @@
 import { inject, injectable } from 'tsyringe';
-import { ILoginUseCase, LoginResponse } from '../interfaces/ILoginUseCase';
-import { IUserRepository } from '../../domain/repositories/IUserRepository';
-import { IPasswordService } from '../../domain/services/IPasswordService';
-import { IJwtService } from '../../domain/services/IJwtService';
-import { ErrorMessages } from '../../constants/messages/ErrorMessages';
-import { UserRole } from '../../constants/enums/UserRole';
+import { ILoginUseCase, LoginResponse } from '../../interfaces/auth/ILoginUseCase';
+import { IUserRepository } from '../../../domain/repositories/IUserRepository';
+import { IPasswordService } from '../../../domain/services/IPasswordService';
+import { IJwtService } from '../../../domain/services/IJwtService';
+import { ErrorMessages } from '../../../constants/messages/ErrorMessages';
+import { UserRole } from '../../../constants/enums/UserRole';
 
 @injectable()
 export class LoginUseCase implements ILoginUseCase {

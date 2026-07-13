@@ -1,14 +1,15 @@
 import { Router } from 'express';
+import { container } from '../../../infrastructure/config/container';
 import { AdminComboOfferController } from '../../controllers/AdminComboOfferController';
 import { adminAuthProtect } from '../../../middleware/adminAuthMiddleware';
 
 const router = Router();
-const controller = new AdminComboOfferController();
+const controller = container.resolve(AdminComboOfferController);
 
-router.post('/', adminAuthProtect, (req, res) => controller.createComboOffer(req, res));
-router.get('/list', adminAuthProtect, (req, res) => controller.getComboOffers(req, res));
-router.put('/:id', adminAuthProtect, (req, res) => controller.updateComboOffer(req, res));
-router.delete('/:id', adminAuthProtect, (req, res) => controller.deleteComboOffer(req, res));
-router.put('/:id/toggle', adminAuthProtect, (req, res) => controller.toggleStatus(req, res));
+router.post('/', adminAuthProtect, (req, res, next) => controller.createComboOffer(req, res, next));
+router.get('/list', adminAuthProtect, (req, res, next) => controller.getComboOffers(req, res, next));
+router.put('/:id', adminAuthProtect, (req, res, next) => controller.updateComboOffer(req, res, next));
+router.delete('/:id', adminAuthProtect, (req, res, next) => controller.deleteComboOffer(req, res, next));
+router.put('/:id/toggle', adminAuthProtect, (req, res, next) => controller.toggleStatus(req, res, next));
 
 export default router;

@@ -1,14 +1,14 @@
 import { inject, injectable } from 'tsyringe';
-import { IUserRepository } from '../../domain/repositories/IUserRepository';
-import { IPasswordService } from '../../domain/services/IPasswordService';
-import { IJwtService } from '../../domain/services/IJwtService';
-import { User } from '../../domain/entities/User';
-import { UserRole } from '../../constants/enums/UserRole';
-import { IEmailService } from '../../domain/services/IEmailService';
-import { UserOTPVerificationModel } from '../../infrastructure/database/models/UserOTPVerificationModel';
-import { UserModel } from '../../infrastructure/database/models/UserModel';
-import { WalletModel } from '../../infrastructure/database/models/WalletModel';
-import { IRegisterUseCase, RegisterRequest, RegisterResponse } from '../interfaces/IRegisterUseCase';
+import { IUserRepository } from '../../../domain/repositories/IUserRepository';
+import { IPasswordService } from '../../../domain/services/IPasswordService';
+import { IJwtService } from '../../../domain/services/IJwtService';
+import { User } from '../../../domain/entities/User';
+import { UserRole } from '../../../constants/enums/UserRole';
+import { IEmailService } from '../../../domain/services/IEmailService';
+import { UserOTPVerificationModel } from '../../../infrastructure/database/models/UserOTPVerificationModel';
+import { UserModel } from '../../../infrastructure/database/models/UserModel';
+import { WalletModel } from '../../../infrastructure/database/models/WalletModel';
+import { IRegisterUseCase, RegisterRequest, RegisterResponse } from '../../interfaces/auth/IRegisterUseCase';
 import crypto from 'crypto';
 
 @injectable()

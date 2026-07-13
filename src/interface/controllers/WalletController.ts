@@ -1,26 +1,26 @@
 import { Request, Response } from 'express';
-import { injectable } from 'tsyringe';
-import { WalletModel } from '../../infrastructure/database/models/WalletModel';
+import { inject, injectable } from 'tsyringe';
+import { IGetWalletUseCase } from '../../application/interfaces/user/IWalletUseCases';
+import { STATUS_CODES } from '../../shared/constants/statusCodes';
 
 @injectable()
 export class WalletController {
-    public async getWallet(req: Request, res: Response): Promise<void> {
+    constructor(@inject('IGetWalletUseCase') private getWalletUseCase: IGetWalletUseCase) {}
+
+    async getWallet(req: Request, res: Response): Promise<void> {
         try {
             const userId = (req as any).user.id;
-            const wallet = await WalletModel.findOne({ userId });
+            const wallet = await this.getWalletUseCase.execute(userId);
 
-            if (!wallet) {
-                res.status(404).json({ success: false, message: 'Wallet not found' });
-                return;
-            }
-
-            res.status(200).json({
+            res.status(STATUS_CODES.OK).json({
                 success: true,
                 data: { wallet }
             });
         } catch (error: any) {
-            console.error('Get Wallet Error:', error);
-            res.status(500).json({ success: false, message: 'Server Error Fetching Wallet' });
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ 
+                success: false, 
+                message: error.message || 'Server Error Fetching Wallet' 
+            });
         }
     }
 }

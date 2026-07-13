@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { container } from 'tsyringe';
-import { IAuthService } from '../application/interfaces/IAuthService';
+import { IAuthService } from '../application/interfaces/auth/IAuthService';
 
 export const userAuthProtect = async (
     req: Request,

@@ -22,6 +22,7 @@ import adminShippingChargeRoutes from './interface/routes/admin/adminShippingCha
 import adminOfferRoutes from './interface/routes/admin/adminOfferRoutes';
 import adminComboOfferRoutes from './interface/routes/admin/adminComboOfferRoutes';
 import adminUserRoutes from './interface/routes/admin/adminUserRoutes';
+import adminLoyaltySettingRoutes from './interface/routes/admin/adminLoyaltySettingRoutes';
 import userAuthRoutes from './interface/routes/user/userAuthRoutes';
 import userCategoryRoutes from './interface/routes/user/categoryRoutes';
 import userProductRoutes from './interface/routes/user/productRoutes';
@@ -30,10 +31,13 @@ import userCartRoutes from './interface/routes/user/cartRoutes';
 import userOrderRoutes from './interface/routes/user/userOrderRoutes';
 import userWalletRoutes from './interface/routes/user/walletRoutes';
 import userCouponRoutes from './interface/routes/user/couponRoutes';
+import userLoyaltyRoutes from './interface/routes/user/userLoyaltyRoutes';
 import adminInfluencerRoutes from './interface/routes/admin/adminInfluencerRoutes';
 import userInfluencerRoutes from './interface/routes/user/userInfluencerRoutes';
 import { errorHandler } from './middleware/errorMiddleware';
 import { startCommissionCron } from './infrastructure/jobs/CommissionCron';
+import { startInfluencerCommissionCron } from './infrastructure/cron/InfluencerCommissionCron';
+import { startNaturePointsExpiryCron } from './infrastructure/cron/NaturePointsExpiryCron';
 
 // Exported models to ensure registration
 import './infrastructure/database/models/CategoryModel';
@@ -55,7 +59,7 @@ import './infrastructure/database/models/WalletModel';
 import './infrastructure/database/models/ReferralSettingModel';
 import './infrastructure/database/models/ShippingChargeModel';
 import './infrastructure/database/models/ShippingAgencyModel';
-
+import './infrastructure/database/models/InfluencerSettingModel';
 
 
 const app = express();
@@ -112,6 +116,7 @@ app.get('/api/admin/ping', (req, res) => res.json({ success: true, message: 'Ser
 app.use('/api/admin/combo-listing', adminComboOfferRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/influencers', adminInfluencerRoutes);
+app.use('/api/admin/loyalty-settings', adminLoyaltySettingRoutes);
 app.use('/api/admin', adminShippingChargeRoutes);
 app.use('/api/user/auth', userAuthRoutes);
 app.use('/api/user/categories', userCategoryRoutes);
@@ -121,6 +126,7 @@ app.use('/api/user/cart', userCartRoutes);
 app.use('/api/user/order', userOrderRoutes);
 app.use('/api/user/wallet', userWalletRoutes);
 app.use('/api/user/coupon', userCouponRoutes);
+app.use('/api/user/loyalty', userLoyaltyRoutes);
 app.use('/api/user/influencer', userInfluencerRoutes);
 
 // Error Handler
@@ -133,4 +139,6 @@ app.listen(PORT, () => {
     
     // Start background jobs
     startCommissionCron();
+    startInfluencerCommissionCron();
+    startNaturePointsExpiryCron();
 });

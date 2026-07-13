@@ -5,4 +5,6 @@ export interface IUserRepository {
     findByPhoneNumber(phoneNumber: string): Promise<User | null>;
     findById(id: string): Promise<User | null>;
     save(user: User): Promise<User>;
+    findInfluencers(): Promise<any[]>;
+    findByIdAndUpdate(id: string, data: any): Promise<any | null>;
 }

@@ -1,21 +1,16 @@
 import express from 'express';
+import { container } from '../../../infrastructure/config/container';
 import { adminAuthProtect } from '../../../middleware/adminAuthMiddleware';
-import {
-    addCoupon,
-    getAllCoupons,
-    getCouponById,
-    updateCoupon,
-    deleteCoupon,
-    toggleCouponStatus
-} from '../../controllers/AdminCouponController';
+import { AdminCouponController } from '../../controllers/AdminCouponController';
 
 const router = express.Router();
+const adminCouponController = container.resolve(AdminCouponController);
 
-router.get('/', adminAuthProtect, getAllCoupons);
-router.post('/add', adminAuthProtect, addCoupon);
-router.get('/:id', adminAuthProtect, getCouponById);
-router.put('/:id', adminAuthProtect, updateCoupon);
-router.delete('/:id', adminAuthProtect, deleteCoupon);
-router.patch('/:id/toggle-status', adminAuthProtect, toggleCouponStatus);
+router.get('/', adminAuthProtect, (req, res) => adminCouponController.getAllCoupons(req, res));
+router.post('/add', adminAuthProtect, (req, res) => adminCouponController.addCoupon(req, res));
+router.get('/:id', adminAuthProtect, (req, res) => adminCouponController.getCouponById(req, res));
+router.put('/:id', adminAuthProtect, (req, res) => adminCouponController.updateCoupon(req, res));
+router.delete('/:id', adminAuthProtect, (req, res) => adminCouponController.deleteCoupon(req, res));
+router.patch('/:id/toggle-status', adminAuthProtect, (req, res) => adminCouponController.toggleCouponStatus(req, res));
 
 export default router;

@@ -37,16 +37,40 @@ export interface IOrderedProduct {
             discountAmount: number;
         };
     };
-    orderStatus: 'Pending' | 'Order Placed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Cancellation Request' | 'Return Request' | 'Return' | 'Returned' | 'Expired';
+    orderStatus: 'Pending' | 'Order Placed' | 'Processing' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Cancelled' | 'Cancellation Request' | 'Return Request' | 'Return Approved' | 'Return' | 'Returned' | 'Expired';
     shippingDetails?: {
         agencyName: string;
         trackingNumber: string;
-        agencyUrl: string;
+        agencyUrl?: string;
         shippedDate: Date;
+        expectedDeliveryDate?: Date;
+        deliveredDate?: Date;
+        returnedDate?: Date;
     };
+    deliveryUpdates?: {
+        previousExpectedDate?: Date;
+        newExpectedDate: Date;
+        reason: string;
+        updatedBy: string;
+        updatedDate: Date;
+    }[];
     cancellation?: {
         reason?: string;
         cancelDate?: Date;
+        isAccepted?: boolean;
+        isRejected?: boolean;
+        adminNotes?: string;
+        rejectionReason?: string;
+    };
+    returnRequest?: {
+        reason?: string;
+        remarks?: string;
+        images?: string[];
+        requestDate?: Date;
+        isAccepted?: boolean;
+        isRejected?: boolean;
+        adminNotes?: string;
+        rejectionReason?: string;
     };
     cancelledBy?: string;
 }
@@ -56,7 +80,7 @@ export interface IOrderDocument extends Document {
     invoiceNo?: number;
     paymentMethod: 'COD' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'Online';
     paymentStatus?: 'Pending' | 'Success' | 'Failed' | 'Completed' | 'Refund_Pending' | 'Refunded' | 'Cancelled' | 'Returned' | 'Expired';
-    globalOrderStatus: 'PENDING' | 'PLACED' | 'PARTIALLY_PROCESSING' | 'PROCESSING' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired';
+    globalOrderStatus: 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired' | 'Order Placed' | 'Processed' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Partially Delivered' | 'Partially Fulfilled' | 'Cancelled' | 'Partially Returned' | 'Returned' | 'Closed' | 'Return Request Pending' | 'Return Approved' | 'Cancel Request Pending' | 'Action Required';
     razorpayPaymentId?: string;
     razorpayOrderId?: string;
     razorpaySignature?: string;
@@ -85,8 +109,17 @@ export interface IOrderDocument extends Document {
     // Influencer Attribution
     influencerId?: mongoose.Types.ObjectId;
     influencerCode?: string;
+    influencerDiscountAmount?: number;
     influencerCommissionAmount?: number;
     influencerCommissionStatus?: 'PENDING' | 'APPROVED' | 'CANCELLED' | 'EXPIRED';
+    
+    // Loyalty Rewards
+    naturePointsUsed?: number;
+    naturePointsDiscount?: number;
+    redeemedBatches?: {
+        batchId: mongoose.Types.ObjectId;
+        pointsDeducted: number;
+    }[];
     
     // Delivery and Return Tracking
     deliveredAt?: Date;
@@ -94,11 +127,11 @@ export interface IOrderDocument extends Document {
     
     createdAt: Date;
     updatedAt: Date;
-    calculateGlobalOrderStatus(): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired';
+    calculateGlobalOrderStatus(): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired' | 'Order Placed' | 'Processed' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Partially Delivered' | 'Partially Fulfilled' | 'Cancelled' | 'Partially Returned' | 'Returned' | 'Closed' | 'Return Request Pending' | 'Return Approved' | 'Cancel Request Pending' | 'Action Required';
 }
 
 export interface IOrderModel extends mongoose.Model<IOrderDocument> {
-    calculateGlobalStatus(products: IOrderedProduct[]): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired';
+    calculateGlobalStatus(products: IOrderedProduct[]): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired' | 'Order Placed' | 'Processed' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Partially Delivered' | 'Partially Fulfilled' | 'Cancelled' | 'Partially Returned' | 'Returned' | 'Closed' | 'Return Request Pending' | 'Return Approved' | 'Cancel Request Pending' | 'Action Required';
 }
 
 const orderSchema = new Schema<IOrderDocument>({
@@ -115,8 +148,8 @@ const orderSchema = new Schema<IOrderDocument>({
     },
     globalOrderStatus: {
         type: String,
-        enum: ['PENDING', 'PLACED', 'PARTIALLY_SHIPPED', 'SHIPPED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'PARTIALLY_RETURNED', 'RETURNED', 'PARTIALLY_CANCELLED', 'PROCESSING', 'PARTIALLY_PROCESSING', 'CANCELLATION_REQUEST', 'RETURN_REQUEST', 'Expired'],
-        default: 'PLACED'
+        enum: ['PENDING', 'PLACED', 'PARTIALLY_SHIPPED', 'SHIPPED', 'OUT_FOR_DELIVERY', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'PARTIALLY_RETURNED', 'RETURNED', 'PARTIALLY_CANCELLED', 'PROCESSING', 'PARTIALLY_PROCESSING', 'CANCELLATION_REQUEST', 'RETURN_REQUEST', 'Expired', 'Order Placed', 'Processed', 'Shipped', 'Out for Delivery', 'Delivered', 'Partially Delivered', 'Partially Fulfilled', 'Cancelled', 'Partially Returned', 'Returned', 'Closed', 'Return Request Pending', 'Return Approved', 'Cancel Request Pending', 'Action Required'],
+        default: 'Order Placed'
     },
     razorpayPaymentId: { type: String },
     razorpayOrderId: { type: String },
@@ -170,18 +203,42 @@ const orderSchema = new Schema<IOrderDocument>({
             }
         },
         orderStatus: {
-            type: String, enum: ['Pending', 'Order Placed', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Cancellation Request', 'Return Request', 'Return', 'Returned', 'Expired'],
+            type: String, enum: ['Pending', 'Order Placed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Cancellation Request', 'Return Request', 'Return Approved', 'Return', 'Returned', 'Expired'],
             default: 'Order Placed'
         },
         shippingDetails: {
             agencyName: { type: String },
             trackingNumber: { type: String },
             agencyUrl: { type: String },
-            shippedDate: { type: Date }
+            shippedDate: { type: Date },
+            expectedDeliveryDate: { type: Date },
+            deliveredDate: { type: Date },
+            returnedDate: { type: Date }
         },
+        deliveryUpdates: [{
+            previousExpectedDate: { type: Date },
+            newExpectedDate: { type: Date, required: true },
+            reason: { type: String, required: true },
+            updatedBy: { type: String, required: true },
+            updatedDate: { type: Date, default: Date.now }
+        }],
         cancellation: {
             reason: { type: String, default: null },
-            cancelDate: { type: Date, default: null }
+            cancelDate: { type: Date, default: null },
+            isAccepted: { type: Boolean, default: false },
+            isRejected: { type: Boolean, default: false },
+            adminNotes: { type: String, default: null },
+            rejectionReason: { type: String, default: null }
+        },
+        returnRequest: {
+            reason: { type: String, default: null },
+            remarks: { type: String, default: null },
+            images: [{ type: String }],
+            requestDate: { type: Date, default: null },
+            isAccepted: { type: Boolean, default: false },
+            isRejected: { type: Boolean, default: false },
+            adminNotes: { type: String, default: null },
+            rejectionReason: { type: String, default: null }
         },
         cancelledBy: { type: String }
     }],
@@ -197,11 +254,20 @@ const orderSchema = new Schema<IOrderDocument>({
     // Influencer Attribution
     influencerId: { type: Schema.Types.ObjectId, ref: 'User' },
     influencerCode: { type: String },
+    influencerDiscountAmount: { type: Number, default: 0 },
     influencerCommissionAmount: { type: Number },
     influencerCommissionStatus: { 
         type: String, 
         enum: ['PENDING', 'APPROVED', 'CANCELLED', 'EXPIRED']
     },
+
+    // Loyalty Rewards
+    naturePointsUsed: { type: Number, default: 0 },
+    naturePointsDiscount: { type: Number, default: 0 },
+    redeemedBatches: [{
+        batchId: { type: Schema.Types.ObjectId, ref: 'NaturePointBatch', required: true },
+        pointsDeducted: { type: Number, required: true }
+    }],
     
     // Delivery and Return Tracking
     deliveredAt: { type: Date },
@@ -212,51 +278,50 @@ const orderSchema = new Schema<IOrderDocument>({
 // Standalone calculation function for maximum reliability
 const calculateGlobalStatusLogic = (products: IOrderedProduct[]) => {
     const totalItems = products.length;
-    if (totalItems === 0) return 'PLACED';
+    if (totalItems === 0) return 'Order Placed';
 
     const statuses = products.map(p => p.orderStatus);
 
-    if (statuses.some(s => s === 'Cancellation Request')) return 'CANCELLATION_REQUEST';
-    if (statuses.some(s => s === 'Return Request')) return 'RETURN_REQUEST';
-    if (statuses.some(s => s === 'Pending')) return 'PENDING';
+    const hasCancelReq = statuses.includes('Cancellation Request');
+    const hasReturnReq = statuses.includes('Return Request');
+    const hasReturnApproved = statuses.includes('Return Approved');
 
-    const allEqual = (status: string) =>
-        statuses.every(s => s === status);
+    // Priority Rules
+    if (hasCancelReq && hasReturnReq) return 'Action Required';
+    if (hasCancelReq) return 'Cancel Request Pending';
+    if (hasReturnReq) return 'Return Request Pending';
+    if (hasReturnApproved) return 'Return Approved';
 
-    const someEqual = (status: string) =>
-        statuses.some(s => s === status);
+    const allEqual = (status: string) => statuses.every(s => s === status);
+    const someEqual = (status: string) => statuses.some(s => s === status);
 
-    // 1️⃣ All same state (strict match)
-    if (allEqual('Delivered')) return 'DELIVERED';
-    if (allEqual('Cancelled')) return 'CANCELLED';
-    if (allEqual('Returned')) return 'RETURNED';
-    if (allEqual('Return')) return 'RETURNED';
-    if (allEqual('Shipped')) { console.log("all shipped"); return 'SHIPPED' };
-    if (allEqual('Processing')) return 'PROCESSING';
-    if (allEqual('Order Placed')) return 'PLACED';
-    if (allEqual('Expired')) return 'Expired';
+    // Cases 1-4, 8, 10
+    if (allEqual('Order Placed') || allEqual('Pending')) return 'Order Placed';
+    if (allEqual('Processing')) return 'Processed';
+    if (allEqual('Shipped')) return 'Shipped';
+    if (allEqual('Out for Delivery')) return 'Out for Delivery';
+    if (allEqual('Delivered')) return 'Delivered';
+    if (allEqual('Cancelled')) return 'Cancelled';
+    if (allEqual('Return Approved')) return 'Return Approved';
+    if (allEqual('Returned') || allEqual('Return')) return 'Returned';
 
-    // 2️⃣ All terminal but mixed
-    const terminalStates = ['Delivered', 'Cancelled', 'Returned', 'Return'];
-    const allTerminal = statuses.every(s => terminalStates.includes(s));
+    // Case 12: All products are either Returned or Cancelled
+    const isTerminal = (s: string) => s === 'Returned' || s === 'Return' || s === 'Cancelled';
+    if (statuses.every(isTerminal)) return 'Closed';
 
-    if (allTerminal) {
-        if (someEqual('Delivered')) return 'COMPLETED';
-        if (someEqual('Returned') || someEqual('Return')) return 'RETURNED';
-        return 'CANCELLED';
+    // Cases 5, 6, 9, 13 (Mixes with Delivered or Out for Delivery)
+    if (someEqual('Delivered') || someEqual('Out for Delivery')) {
+        // Case 9: Some Returned, Remaining Delivered
+        const isReturnedOrDelivered = (s: string) => s === 'Returned' || s === 'Return' || s === 'Delivered';
+        if (statuses.every(isReturnedOrDelivered) && statuses.some(s => s === 'Returned' || s === 'Return')) {
+            return 'Partially Returned';
+        }
+        // Cases 5, 6, 13
+        return 'Partially Delivered';
     }
 
-    // 3️⃣ Partial states
-    if (someEqual('Return')) return 'PARTIALLY_RETURNED';
-    if (someEqual('Returned')) return 'PARTIALLY_RETURNED';
-    if (someEqual('Return Request')) return 'RETURN_REQUEST'; // Added
-    if (someEqual('Delivered')) return 'PARTIALLY_DELIVERED';
-    if (someEqual('Shipped')) return 'PARTIALLY_SHIPPED';
-    if (someEqual('Cancelled')) return 'PARTIALLY_CANCELLED';
-    if (someEqual('Cancellation Request')) return 'CANCELLATION_REQUEST'; // Added
-    if (someEqual('Processing')) return 'PARTIALLY_PROCESSING';
-
-    return 'PLACED';
+    // Cases 7, 11 (Mixes without Delivered, not all terminal)
+    return 'Partially Fulfilled';
 };
 
 // Pre-save hook to automatically update globalOrderStatus, cancelledAmount, and refundAmount
@@ -280,6 +345,15 @@ orderSchema.pre('save', function (next) {
         this.returnedAmount = currentReturnedAmount;
         this.markModified('cancelledAmount');
         this.markModified('returnedAmount');
+
+        // Set returnExpiryDate and deliveredAt if status is DELIVERED and not previously set
+        if (this.globalOrderStatus === 'DELIVERED' && !this.deliveredAt) {
+            this.deliveredAt = new Date();
+            const returnDays = 7; // Configurable window (default 7 days)
+            const expiry = new Date(this.deliveredAt);
+            expiry.setDate(expiry.getDate() + returnDays);
+            this.returnExpiryDate = expiry;
+        }
     } catch (err) {
         console.error('[HOOK_ERROR] Failed to update global status or amounts:', err);
     }

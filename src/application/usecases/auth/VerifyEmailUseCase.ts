@@ -1,10 +1,10 @@
 import { inject, injectable } from 'tsyringe';
-import { IUserRepository } from '../../domain/repositories/IUserRepository';
-import { UserOTPVerificationModel } from '../../infrastructure/database/models/UserOTPVerificationModel';
-import { UserModel } from '../../infrastructure/database/models/UserModel';
-import { IEmailService } from '../../domain/services/IEmailService';
-import { ReferralSettingModel } from '../../infrastructure/database/models/ReferralSettingModel';
-import { IVerifyEmailUseCase } from '../interfaces/IVerifyEmailUseCase';
+import { IUserRepository } from '../../../domain/repositories/IUserRepository';
+import { UserOTPVerificationModel } from '../../../infrastructure/database/models/UserOTPVerificationModel';
+import { UserModel } from '../../../infrastructure/database/models/UserModel';
+import { IEmailService } from '../../../domain/services/IEmailService';
+import { ReferralSettingModel } from '../../../infrastructure/database/models/ReferralSettingModel';
+import { IVerifyEmailUseCase } from '../../interfaces/auth/IVerifyEmailUseCase';
 
 @injectable()
 export class VerifyEmailUseCase implements IVerifyEmailUseCase {

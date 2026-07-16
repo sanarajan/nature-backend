@@ -133,9 +133,9 @@ export class UpdateOrderStatusUseCase {
                     (async () => {
                         try {
                             const loyaltyUseCases = new UserLoyaltyUseCases();
-                            const price = product.finalPrice || product.price;
+                            const eligibleAmount = order.totalMRP - (order.totalDiscount || 0) || order.totalAmount;
                             const uId = (order.userId as any)._id ? (order.userId as any)._id.toString() : order.userId.toString();
-                            await loyaltyUseCases.earnPoints(uId, price * product.quantity, order.orderId);
+                            await loyaltyUseCases.earnPoints(uId, eligibleAmount, order.orderId);
                         } catch (e) {
                             console.error('Error awarding Nature Points:', e);
                         }
@@ -203,13 +203,12 @@ export class UpdateOrderStatusUseCase {
                     }
                     // Award Nature Points if newly delivered
                     if (status === 'Delivered' && previousStatus !== 'Delivered' && !product.cancellation?.cancelDate && !product.returnRequest?.requestDate) {
-                        // Using setImmediate or an inline async IIFE to not block the main synchronous loop map
                         (async () => {
                             try {
                                 const loyaltyUseCases = new UserLoyaltyUseCases();
-                                const price = product.finalPrice || product.price;
+                                const eligibleAmount = order.totalMRP - (order.totalDiscount || 0) || order.totalAmount;
                                 const uId = (order.userId as any)._id ? (order.userId as any)._id.toString() : order.userId.toString();
-                                await loyaltyUseCases.earnPoints(uId, price * product.quantity, order.orderId);
+                                await loyaltyUseCases.earnPoints(uId, eligibleAmount, order.orderId);
                             } catch (e) {
                                 console.error('Error awarding Nature Points:', e);
                             }
@@ -275,22 +274,50 @@ export class UpdateOrderStatusUseCase {
             }
         }
 
-        if (order.influencerId && order.influencerCommissionStatus === 'PENDING') {
+        if (order.influencerId) {
+            const influencer = await UserModel.findById(order.influencerId);
+            if (influencer) {
+                let pendingBalanceChanged = false;
+                let hasProductSnapshots = false;
+
+                order.orderedProducts.forEach(p => {
+                    if (p.influencerCommissionAmount !== undefined && p.influencerCommissionAmount !== null) {
+                        hasProductSnapshots = true;
+                    }
+                    if (['Cancelled', 'Returned', 'Expired'].includes(p.orderStatus) && p.influencerCommissionStatus === 'PENDING') {
+                        p.influencerCommissionStatus = 'REJECTED';
+                        const itemComm = p.influencerCommissionAmount || 0;
+                        if (itemComm > 0) {
+                            influencer.influencerPendingBalance = Math.max(0, Number(((influencer.influencerPendingBalance || 0) - itemComm).toFixed(2)));
+                            pendingBalanceChanged = true;
+                        }
+                    } else if (p.orderStatus === 'Delivered' && !p.returnExpiryDate) {
+                        const delivered = p.shippingDetails?.deliveredDate || order.deliveredAt || new Date();
+                        const expiry = new Date(delivered);
+                        expiry.setDate(expiry.getDate() + 7);
+                        p.returnExpiryDate = expiry;
+                    }
+                });
+
+                if (!hasProductSnapshots && order.influencerCommissionStatus === 'PENDING' && ['CANCELLED', 'RETURNED', 'Expired', 'Cancelled', 'Returned'].includes(order.globalOrderStatus)) {
+                    order.influencerCommissionStatus = 'REJECTED';
+                    const orderComm = order.influencerCommissionAmount || 0;
+                    if (orderComm > 0) {
+                        influencer.influencerPendingBalance = Math.max(0, Number(((influencer.influencerPendingBalance || 0) - orderComm).toFixed(2)));
+                        pendingBalanceChanged = true;
+                    }
+                }
+
+                if (pendingBalanceChanged) {
+                    await influencer.save();
+                }
+            }
+
             if ((order.globalOrderStatus === 'DELIVERED' || order.globalOrderStatus === 'Delivered') && !order.deliveredAt) {
                 order.deliveredAt = new Date();
                 const returnExpiry = new Date(order.deliveredAt.getTime());
                 returnExpiry.setDate(returnExpiry.getDate() + 7);
                 order.returnExpiryDate = returnExpiry;
-            } else if (['CANCELLED', 'RETURNED', 'Expired', 'Cancelled', 'Returned'].includes(order.globalOrderStatus)) {
-                order.influencerCommissionStatus = 'CANCELLED';
-                
-                if (order.influencerCommissionAmount) {
-                    const influencer = await UserModel.findById(order.influencerId);
-                    if (influencer) {
-                        influencer.influencerPendingBalance = Math.max(0, (influencer.influencerPendingBalance || 0) - order.influencerCommissionAmount);
-                        await influencer.save();
-                    }
-                }
             }
         }
 

@@ -7,5 +7,9 @@ export interface IRequestWithdrawalUseCase {
 }
 
 export interface IUpgradeToInfluencerUseCase {
-    execute(userId: string): Promise<any>;
+    execute(userId: string, socialProfiles?: { facebook?: string; instagram?: string; youtube?: string }): Promise<any>;
+}
+
+export interface ITrackReferralVisitUseCase {
+    execute(code: string, sessionId: string, userId?: string | null): Promise<boolean>;
 }

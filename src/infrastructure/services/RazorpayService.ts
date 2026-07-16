@@ -8,14 +8,19 @@ dotenv.config();
 
 @injectable()
 export class RazorpayService implements IRazorpayService {
-    public razorpay: Razorpay;
+    private _razorpay: Razorpay | null = null;
 
-    constructor() {
-        this.razorpay = new Razorpay({
-            key_id: process.env.RAZORPAY_KEY_ID || '',
-            key_secret: process.env.RAZORPAY_KEY_SECRET || '',
-        });
+    public get razorpay(): Razorpay {
+        if (!this._razorpay) {
+            this._razorpay = new Razorpay({
+                key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+                key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_test_placeholder_secret',
+            });
+        }
+        return this._razorpay;
     }
+
+    constructor() {}
 
     public async createOrder(amount: number, receipt: string) {
         const options = {

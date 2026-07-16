@@ -24,11 +24,32 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
     }
 
     async findInfluencers(): Promise<any[]> {
-        return UserModel.find({ isInfluencer: true }).sort({ createdAt: -1 }).exec();
+        return UserModel.find({
+            isInfluencer: true,
+            influencerRequestStatus: { $nin: ['PENDING', 'REJECTED'] }
+        }).sort({ createdAt: -1 }).exec();
+    }
+
+    async findPendingInfluencerRequests(): Promise<any[]> {
+        return UserModel.find({ influencerRequestStatus: 'PENDING' }).sort({ influencerRequestDate: -1, createdAt: -1 }).exec();
+    }
+
+    async findAllInfluencerRequests(): Promise<any[]> {
+        return UserModel.find({ influencerRequestStatus: { $in: ['PENDING', 'APPROVED', 'REJECTED'] } }).sort({ influencerRequestDate: -1, createdAt: -1 }).exec();
     }
 
     async findByIdAndUpdate(id: string, data: any): Promise<any | null> {
         return UserModel.findByIdAndUpdate(id, data, { new: true }).exec();
+    }
+
+    async trackReferralVisit(code: string): Promise<boolean> {
+        if (!code) return false;
+        const cleanCode = code.trim();
+        const result = await UserModel.updateOne(
+            { influencerCode: { $regex: new RegExp(`^${cleanCode}$`, 'i') }, isInfluencer: true },
+            { $inc: { influencerReferralVisits: 1 } }
+        ).exec();
+        return result.modifiedCount > 0;
     }
 
     protected mapToEntity(userDoc: IUserDocument): User {
@@ -51,7 +72,18 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
             userDoc.createdAt,
             userDoc.updatedAt,
             userDoc.isInfluencer,
-            userDoc.influencerCode
+            userDoc.influencerCode,
+            userDoc.influencerRequestStatus,
+            userDoc.influencerRequestDate,
+            userDoc.influencerSocialProfiles,
+            userDoc.influencerRejectionReason,
+            userDoc.influencerStatus,
+            userDoc.influencerReferralVisits || 0,
+            userDoc.commissionPercentage,
+            userDoc.influencerWalletBalance,
+            userDoc.influencerPendingBalance,
+            userDoc.influencerTotalEarned,
+            userDoc.influencerTotalWithdrawn
         );
     }
 
@@ -68,7 +100,17 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
             referralId: user.referralId,
             referredBy: user.referredBy,
             isInfluencer: user.isInfluencer,
-            influencerCode: user.influencerCode
+            influencerCode: user.influencerCode,
+            influencerRequestStatus: user.influencerRequestStatus,
+            influencerRequestDate: user.influencerRequestDate,
+            influencerSocialProfiles: user.influencerSocialProfiles,
+            influencerRejectionReason: user.influencerRejectionReason,
+            influencerStatus: user.influencerStatus,
+            commissionPercentage: user.commissionPercentage,
+            influencerWalletBalance: user.influencerWalletBalance,
+            influencerPendingBalance: user.influencerPendingBalance,
+            influencerTotalEarned: user.influencerTotalEarned,
+            influencerTotalWithdrawn: user.influencerTotalWithdrawn
         };
     }
 

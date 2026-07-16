@@ -1,9 +1,13 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ITransaction {
-    transactionType: 'credit' | 'debit' | 'referral' | 'purchase' | 'refund';
+    _id?: mongoose.Types.ObjectId;
+    transactionType: 'credit' | 'debit' | 'referral' | 'purchase' | 'refund' | 'commission';
     amount: number;
     date: Date;
+    description?: string;
+    orderId?: string;
+    productId?: mongoose.Types.ObjectId;
 }
 
 export interface IWalletDocument extends Document {
@@ -20,10 +24,13 @@ const walletSchema = new Schema<IWalletDocument>({
     history: [{
         transactionType: {
             type: String,
-            enum: ['credit', 'debit', 'referral', 'purchase', 'refund']
+            enum: ['credit', 'debit', 'referral', 'purchase', 'refund', 'commission']
         },
         amount: { type: Number, default: 0 },
-        date: { type: Date, default: null }
+        date: { type: Date, default: null },
+        description: { type: String },
+        orderId: { type: String },
+        productId: { type: Schema.Types.ObjectId, ref: 'Product' }
     }]
 }, { timestamps: true });
 

@@ -6,11 +6,19 @@ import mongoose from 'mongoose';
 export class UserLoyaltyUseCases {
     async earnPoints(userId: string, spendAmount: number, sourceId: string) {
         const settings = await LoyaltySettingModel.findOne();
-        if (!settings || !settings.isLoyaltyEnabled) return 0;
+        if (!settings || !settings.isLoyaltyEnabled || settings.isEarningEnabled === false) return 0;
+        if (spendAmount < (settings.minOrderAmountToEarn || 0)) return 0;
 
-        const pointsToEarn = Math.floor(spendAmount / settings.purchaseRewardSpendAmount) * settings.purchaseRewardEarnPoints;
+        const existingBatch = await NaturePointBatchModel.findOne({ sourceId, source: 'Purchase' });
+        if (existingBatch) return 0;
+
+        let pointsToEarn = Math.floor(spendAmount / settings.purchaseRewardSpendAmount) * settings.purchaseRewardEarnPoints;
         
         if (pointsToEarn <= 0) return 0;
+
+        if (settings.maxPointsEarnedPerOrder && settings.maxPointsEarnedPerOrder > 0) {
+            pointsToEarn = Math.min(pointsToEarn, settings.maxPointsEarnedPerOrder);
+        }
 
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + settings.pointValidityDays);
@@ -47,6 +55,7 @@ export class UserLoyaltyUseCases {
 
     async getDashboardInfo(userId: string) {
         const points = await this.getAvailablePoints(userId);
+        const settings = await LoyaltySettingModel.findOne();
         
         const now = new Date();
         const nextExpiringBatch = await NaturePointBatchModel.findOne({
@@ -62,7 +71,8 @@ export class UserLoyaltyUseCases {
         return {
             points,
             nextExpiringBatch,
-            transactions
+            transactions,
+            settings
         };
     }
 

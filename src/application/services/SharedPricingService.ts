@@ -289,6 +289,39 @@ export class SharedPricingService {
         let appliedReferralCode = '';
         let appliedCouponId: any = null;
 
+        let appliedInfluencer: any = null;
+        let activeInfluencerCode: string | null = null;
+        const influencerSettings = await InfluencerSettingModel.findOne({ isActive: true });
+        const isInfluencerEnabled = influencerSettings ? influencerSettings.influencerEnabled : true;
+
+        if (isInfluencerEnabled) {
+            const codeToCheck = (couponCode || influencerRef || '').trim();
+            if (codeToCheck) {
+                const inf = await UserModel.findOne({
+                    influencerCode: { $regex: new RegExp(`^${codeToCheck}$`, 'i') },
+                    influencerStatus: { $in: ['Active', 'ACTIVE'] },
+                    isInfluencer: true,
+                    influencerRequestStatus: 'APPROVED'
+                });
+                if (inf && (!userId || inf._id.toString() !== userId)) {
+                    appliedInfluencer = inf;
+                    activeInfluencerCode = inf.influencerCode || null;
+                }
+            }
+            if (!appliedInfluencer && influencerRef && (!couponCode || couponCode !== influencerRef)) {
+                const infCookie = await UserModel.findOne({
+                    influencerCode: { $regex: new RegExp(`^${influencerRef.trim()}$`, 'i') },
+                    influencerStatus: { $in: ['Active', 'ACTIVE'] },
+                    isInfluencer: true,
+                    influencerRequestStatus: 'APPROVED'
+                });
+                if (infCookie && (!userId || infCookie._id.toString() !== userId)) {
+                    appliedInfluencer = infCookie;
+                    activeInfluencerCode = infCookie.influencerCode || null;
+                }
+            }
+        }
+
         if (!hasComboOffer && !hasProductOfferFlag) {
             if (referralCode && userId) {
                 const referrer = await UserModel.findOne({ referralId: referralCode });
@@ -298,10 +331,9 @@ export class SharedPricingService {
                     finalDiscountAmount = (totalMRP * discountPercent) / 100;
                     appliedReferralCode = referralCode;
                 } else if (couponCode === '') {
-                    // if referral is invalid but explicitly requested
                     throw new AppError(`Invalid referral code`, STATUS_CODES.BAD_REQUEST);
                 }
-            } else if (couponCode) {
+            } else if (couponCode && (!activeInfluencerCode || couponCode.toUpperCase() !== activeInfluencerCode.toUpperCase())) {
                 const coupon = await CouponModel.findOne({
                     couponName: { $regex: new RegExp(`^${couponCode}$`, 'i') },
                     status: true,
@@ -345,31 +377,70 @@ export class SharedPricingService {
         }
 
         let influencerDiscountAmount = 0;
-        const influencerSettings = await InfluencerSettingModel.findOne({ isActive: true });
-        const isInfluencerEnabled = influencerSettings ? influencerSettings.influencerEnabled : true;
         const influencerDiscountPercent = influencerSettings?.influencerDiscountPercent || 20;
 
-        const hasOtherDiscount = hasComboOffer || hasProductOfferFlag || appliedCouponId || appliedReferralCode;
-
-        if (influencerRef && isInfluencerEnabled) {
-            const influencer = await UserModel.findOne({ influencerCode: influencerRef, influencerStatus: 'Active' });
-            if (influencer && (!userId || influencer._id.toString() !== userId)) {
-                if (!hasOtherDiscount) {
-                    influencerDiscountAmount = (totalMRP * influencerDiscountPercent) / 100;
-                    finalDiscountAmount += influencerDiscountAmount;
+        if (appliedInfluencer && isInfluencerEnabled) {
+            finalProducts.forEach(item => {
+                const prodInfluencerDiscount = Number(item.product?.influencerDiscount) || 0;
+                if (prodInfluencerDiscount > 0 && item.finalUnitPrice > 0) {
+                    const unitDisc = Math.min(item.finalUnitPrice, prodInfluencerDiscount);
+                    const itemDiscTotal = unitDisc * item.quantity;
+                    item.finalUnitPrice = Math.max(0, item.finalUnitPrice - unitDisc);
+                    item.influencerDiscountAmount = itemDiscTotal;
+                    influencerDiscountAmount += itemDiscTotal;
+                } else {
+                    item.influencerDiscountAmount = 0;
                 }
+            });
+            if (influencerDiscountAmount > 0) {
+                finalDiscountAmount += influencerDiscountAmount;
             }
+        } else {
+            finalProducts.forEach(item => {
+                item.influencerDiscountAmount = 0;
+            });
         }
 
         let naturePointsDiscount = 0;
         let naturePointsUsed = 0;
+        let naturePointsEligibility = {
+            isEligible: false,
+            isLoyaltyEnabled: true,
+            isRedemptionEnabled: true,
+            minOrderAmountToRedeem: 0,
+            minPointsRequiredToRedeem: 0,
+            availablePoints: 0,
+            disabledReason: ''
+        };
 
-        if (useNaturePoints && userId) {
+        if (userId) {
             const loyaltyUseCases = new UserLoyaltyUseCases();
             const availablePoints = await loyaltyUseCases.getAvailablePoints(userId);
             const settings = await LoyaltySettingModel.findOne();
-            
-            if (availablePoints > 0 && settings && settings.isLoyaltyEnabled) {
+
+            naturePointsEligibility.availablePoints = availablePoints || 0;
+            if (settings) {
+                naturePointsEligibility.isLoyaltyEnabled = settings.isLoyaltyEnabled;
+                naturePointsEligibility.isRedemptionEnabled = settings.isRedemptionEnabled ?? true;
+                naturePointsEligibility.minOrderAmountToRedeem = settings.minOrderAmountToRedeem || 0;
+                naturePointsEligibility.minPointsRequiredToRedeem = settings.minPointsRequiredToRedeem || 0;
+            }
+
+            if (!naturePointsEligibility.isLoyaltyEnabled) {
+                naturePointsEligibility.disabledReason = 'Nature Points program is currently disabled.';
+            } else if (!naturePointsEligibility.isRedemptionEnabled) {
+                naturePointsEligibility.disabledReason = 'Nature Points redemption is currently disabled.';
+            } else if (totalMRP < naturePointsEligibility.minOrderAmountToRedeem) {
+                naturePointsEligibility.disabledReason = `Orders below ₹${naturePointsEligibility.minOrderAmountToRedeem} cannot redeem Nature Points.`;
+            } else if (naturePointsEligibility.availablePoints < naturePointsEligibility.minPointsRequiredToRedeem) {
+                naturePointsEligibility.disabledReason = `Minimum ${naturePointsEligibility.minPointsRequiredToRedeem} Nature Points required to redeem.`;
+            } else if (naturePointsEligibility.availablePoints <= 0) {
+                naturePointsEligibility.disabledReason = 'You have 0 available Nature Points.';
+            } else {
+                naturePointsEligibility.isEligible = true;
+            }
+
+            if (useNaturePoints && naturePointsEligibility.isEligible && settings) {
                 const maxRedeemable = Math.min(availablePoints, settings.maxRedeemablePerOrder);
                 const discountValue = maxRedeemable * settings.pointValueInRupees;
                 
@@ -377,7 +448,6 @@ export class SharedPricingService {
                 const maxAllowedDiscount = totalMRP - finalDiscountAmount;
                 if (discountValue > maxAllowedDiscount) {
                     naturePointsDiscount = maxAllowedDiscount;
-                    // Calculate points needed for this max discount
                     naturePointsUsed = Math.ceil(maxAllowedDiscount / settings.pointValueInRupees);
                 } else {
                     naturePointsDiscount = discountValue;
@@ -400,12 +470,16 @@ export class SharedPricingService {
                 referralDiscount: appliedReferralCode ? (finalDiscountAmount - grandTotalDiscount - influencerDiscountAmount) : 0,
                 influencerDiscount: influencerDiscountAmount,
                 influencerDiscountAmount,
-                influencerCode: influencerDiscountAmount > 0 ? influencerRef : null,
-                influencerApplied: influencerDiscountAmount > 0,
+                influencerCode: appliedInfluencer ? activeInfluencerCode : null,
+                influencerApplied: appliedInfluencer ? {
+                    _id: appliedInfluencer._id,
+                    influencerCode: activeInfluencerCode
+                } : null,
                 discountType: influencerDiscountAmount > 0 ? "Influencer" : (hasComboOffer ? "Combo" : (hasProductOfferFlag ? "Product" : (appliedCouponId ? "Coupon" : (appliedReferralCode ? "Referral" : "")))),
                 totalDiscount: finalDiscountAmount,
                 naturePointsDiscount,
                 naturePointsUsed,
+                naturePointsEligibility,
                 deliveryCharge,
                 total: totalAmount,
                 originalPrice: totalMRP,
@@ -417,11 +491,15 @@ export class SharedPricingService {
                 productOrCategory: hasProductOfferFlag,
                 coupon: !!appliedCouponId,
                 referral: !!appliedReferralCode,
-                influencer: influencerDiscountAmount > 0
+                influencer: influencerDiscountAmount > 0 || !!appliedInfluencer
             },
             // Requested explicit fields in the root
             influencerDiscount: influencerDiscountAmount,
-            influencerApplied: influencerDiscountAmount > 0,
+            influencerApplied: appliedInfluencer ? {
+                _id: appliedInfluencer._id,
+                influencerCode: activeInfluencerCode
+            } : null,
+            influencerCode: appliedInfluencer ? activeInfluencerCode : null,
             naturePointsDiscount,
             naturePointsUsed,
             discountType: influencerDiscountAmount > 0 ? "Influencer" : (hasComboOffer ? "Combo" : (hasProductOfferFlag ? "Product" : (appliedCouponId ? "Coupon" : (appliedReferralCode ? "Referral" : "")))),
@@ -440,7 +518,7 @@ export class SharedPricingService {
         console.log(`Category Offer Applied : ${hasProductOfferFlag}`); // Treating product and category offer as same boolean here based on our implementation
         console.log(`Coupon Applied : ${!!appliedCouponId}`);
         console.log(`Referral Applied : ${!!appliedReferralCode}`);
-        console.log(`Offer Exists : ${hasOtherDiscount}`);
+        console.log(`Offer Exists : ${hasComboOffer || hasProductOfferFlag || !!appliedCouponId || !!appliedReferralCode}`);
         console.log(`Entered Influencer Block : ${influencerDiscountAmount > 0}`);
         console.log(`Influencer % : ${influencerDiscountPercent}`);
         console.log(`Influencer Discount : ${influencerDiscountAmount}`);

@@ -140,4 +140,83 @@ export class EmailService implements IEmailService {
             throw new Error('Failed to send shipping email');
         }
     }
+
+    async sendInfluencerApprovalEmail(email: string, userName: string): Promise<void> {
+        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const dashboardUrl = `${clientUrl}/account/influencer`;
+
+        const mailOptions = {
+            from: process.env.EMAIL_FROM || 'noreply@nature.com',
+            to: email,
+            subject: 'Your Naturalayam Influencer Request Has Been Approved!',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2 style="color: #4CAF50;">Congratulations, ${userName}!</h2>
+                    <p>We are delighted to inform you that your request to become a Naturalayam Influencer has been <strong>APPROVED</strong>.</p>
+                    <p>You now have full access to the Influencer Dashboard, where you can find your unique referral code, track your earnings, and manage your commissions.</p>
+                    <div style="margin: 25px 0;">
+                        <a href="${dashboardUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to Influencer Dashboard</a>
+                    </div>
+                    <p>Thank you for partnering with Naturalayam to spread wellness and natural living!</p>
+                </div>
+            `,
+        };
+
+        try {
+            if (process.env.EMAIL_USER) {
+                await this.transporter.sendMail(mailOptions);
+                console.log(`Influencer approval email sent to ${email}`);
+            } else {
+                console.log(`[DEV MODE] Influencer Approval Email for ${email}:\n User => ${userName}\n Dashboard => ${dashboardUrl}`);
+            }
+        } catch (error) {
+            console.error('Error sending influencer approval email:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`[DEV MODE] Influencer Approval Email for ${email}:\n User => ${userName}\n Dashboard => ${dashboardUrl}`);
+                return;
+            }
+            throw new Error('Failed to send influencer approval email');
+        }
+    }
+
+    async sendInfluencerRejectionEmail(email: string, userName: string, reason?: string): Promise<void> {
+        const reasonHtml = reason ? `
+            <div style="background-color: #f8d7da; border-left: 4px solid #f5c6cb; padding: 12px; margin: 15px 0; border-radius: 4px; color: #721c24;">
+                <strong>Reason:</strong> ${reason}
+            </div>
+        ` : '';
+
+        const mailOptions = {
+            from: process.env.EMAIL_FROM || 'noreply@nature.com',
+            to: email,
+            subject: 'Update on Your Naturalayam Influencer Request',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2>Hello, ${userName}</h2>
+                    <p>Thank you for your interest in becoming a Naturalayam Influencer. After careful review, our team has decided not to approve your request at this time.</p>
+                    ${reasonHtml}
+                    <p>Don't worry! Your normal user account status remains completely active and unchanged. You can continue shopping, earning regular rewards, and enjoying our products as usual.</p>
+                    <p>If you have questions or update your social channels in the future, you are welcome to submit a new request from your account profile.</p>
+                    <p>Thank you for being part of the Naturalayam family!</p>
+                </div>
+            `,
+        };
+
+        try {
+            if (process.env.EMAIL_USER) {
+                await this.transporter.sendMail(mailOptions);
+                console.log(`Influencer rejection email sent to ${email}`);
+            } else {
+                console.log(`[DEV MODE] Influencer Rejection Email for ${email}:\n User => ${userName}\n Reason => ${reason || 'N/A'}`);
+            }
+        } catch (error) {
+            console.error('Error sending influencer rejection email:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`[DEV MODE] Influencer Rejection Email for ${email}:\n User => ${userName}\n Reason => ${reason || 'N/A'}`);
+                return;
+            }
+            throw new Error('Failed to send influencer rejection email');
+        }
+    }
 }
+

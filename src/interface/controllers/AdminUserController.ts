@@ -32,11 +32,24 @@ export const getAllCustomers = async (req: Request, res: Response) => {
                     imageUrl: 1,
                     isActive: 1,
                     createdAt: 1,
+                    influencerRequestStatus: 1,
+                    influencerRequestDate: 1,
+                    isInfluencer: 1,
+                    influencerSocialProfiles: 1,
+                    influencerRejectionReason: 1,
                     orderCount: { $size: '$orders' },
                     lastLocation: { $arrayElemAt: ['$addresses', 0] }
                 }
             },
-            { $sort: { createdAt: -1 } }
+            {
+                $addFields: {
+                    isPendingRequest: {
+                        $cond: [{ $eq: ['$influencerRequestStatus', 'PENDING'] }, 1, 0]
+                    }
+                }
+            },
+            { $sort: { isPendingRequest: -1, createdAt: -1 } }
+
         ]);
 
         res.status(200).json({ success: true, data: users });

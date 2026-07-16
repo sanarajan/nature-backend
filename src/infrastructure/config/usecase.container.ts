@@ -29,6 +29,7 @@ import {
     RequestWithdrawalUseCase,
     UpgradeToInfluencerUseCase
 } from '../../application/usecases/user/InfluencerUseCases';
+import { TrackReferralVisitUseCase } from '../../application/usecases/user/TrackReferralVisitUseCase';
 import { GetWalletUseCase } from '../../application/usecases/user/WalletUseCases';
 import { GetActiveCouponsUseCase, ValidateCouponUseCase } from '../../application/usecases/coupon/CouponUseCases';
 import {
@@ -36,7 +37,12 @@ import {
     GetInfluencerStatsUseCase,
     UpdateInfluencerUseCase,
     GetWithdrawalRequestsUseCase,
-    ProcessWithdrawalUseCase
+    ProcessWithdrawalUseCase,
+    GetInfluencerRequestsUseCase,
+    ApproveInfluencerRequestUseCase,
+    RejectInfluencerRequestUseCase,
+    GetInfluencerProductsUseCase,
+    UpdateProductInfluencerDiscountUseCase
 } from '../../application/usecases/admin/AdminInfluencerUseCases';
 import {
     AddCouponUseCase,
@@ -79,6 +85,7 @@ container.registerSingleton<SyncWishlistUseCase>('ISyncWishlistUseCase', SyncWis
 container.registerSingleton<GetInfluencerDashboardUseCase>('IGetInfluencerDashboardUseCase', GetInfluencerDashboardUseCase);
 container.registerSingleton<RequestWithdrawalUseCase>('IRequestWithdrawalUseCase', RequestWithdrawalUseCase);
 container.registerSingleton<UpgradeToInfluencerUseCase>('IUpgradeToInfluencerUseCase', UpgradeToInfluencerUseCase);
+container.registerSingleton<TrackReferralVisitUseCase>('ITrackReferralVisitUseCase', TrackReferralVisitUseCase);
 
 // Wallet UseCases
 container.registerSingleton<GetWalletUseCase>('IGetWalletUseCase', GetWalletUseCase);
@@ -97,6 +104,11 @@ container.registerSingleton<GetInfluencerStatsUseCase>('IGetInfluencerStatsUseCa
 container.registerSingleton<UpdateInfluencerUseCase>('IUpdateInfluencerUseCase', UpdateInfluencerUseCase);
 container.registerSingleton<GetWithdrawalRequestsUseCase>('IGetWithdrawalRequestsUseCase', GetWithdrawalRequestsUseCase);
 container.registerSingleton<ProcessWithdrawalUseCase>('IProcessWithdrawalUseCase', ProcessWithdrawalUseCase);
+container.registerSingleton<GetInfluencerRequestsUseCase>('IGetInfluencerRequestsUseCase', GetInfluencerRequestsUseCase);
+container.registerSingleton<ApproveInfluencerRequestUseCase>('IApproveInfluencerRequestUseCase', ApproveInfluencerRequestUseCase);
+container.registerSingleton<RejectInfluencerRequestUseCase>('IRejectInfluencerRequestUseCase', RejectInfluencerRequestUseCase);
+container.registerSingleton<GetInfluencerProductsUseCase>('IGetInfluencerProductsUseCase', GetInfluencerProductsUseCase);
+container.registerSingleton<UpdateProductInfluencerDiscountUseCase>('IUpdateProductInfluencerDiscountUseCase', UpdateProductInfluencerDiscountUseCase);
 
 // Admin Coupon UseCases
 container.registerSingleton<AddCouponUseCase>('IAddCouponUseCase', AddCouponUseCase);

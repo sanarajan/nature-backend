@@ -106,6 +106,7 @@ export class AdminReturnCancellationUseCases {
             updatedBy: adminName
         });
 
+        await this.handleItemInfluencerRejection(order, item);
         await order.save();
         return order;
     }
@@ -141,8 +142,35 @@ export class AdminReturnCancellationUseCases {
             updatedBy: adminName
         });
 
+        await this.handleItemInfluencerRejection(order, item);
         await order.save();
         return order;
+    }
+
+    private async handleItemInfluencerRejection(order: any, item: any) {
+        if (order.influencerId) {
+            const influencer = await UserModel.findById(order.influencerId);
+            if (influencer) {
+                if (item.influencerCommissionStatus === 'PENDING') {
+                    item.influencerCommissionStatus = 'REJECTED';
+                    const itemComm = item.influencerCommissionAmount || 0;
+                    if (itemComm > 0) {
+                        influencer.influencerPendingBalance = Math.max(0, Number(((influencer.influencerPendingBalance || 0) - itemComm).toFixed(2)));
+                        await influencer.save();
+                    }
+                } else if (!item.influencerCommissionAmount && order.influencerCommissionStatus === 'PENDING') {
+                    const allTerminal = order.orderedProducts.every((p: any) => ['Cancelled', 'Returned', 'Expired'].includes(p.orderStatus));
+                    if (allTerminal) {
+                        order.influencerCommissionStatus = 'REJECTED';
+                        const orderComm = order.influencerCommissionAmount || 0;
+                        if (orderComm > 0) {
+                            influencer.influencerPendingBalance = Math.max(0, Number(((influencer.influencerPendingBalance || 0) - orderComm).toFixed(2)));
+                            await influencer.save();
+                        }
+                    }
+                }
+            }
+        }
     }
 
     async rejectCancellationRequest(orderId: string, productId: string, rejectionReason: string, adminName: string) {

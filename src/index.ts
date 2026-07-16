@@ -60,6 +60,7 @@ import './infrastructure/database/models/ReferralSettingModel';
 import './infrastructure/database/models/ShippingChargeModel';
 import './infrastructure/database/models/ShippingAgencyModel';
 import './infrastructure/database/models/InfluencerSettingModel';
+import './infrastructure/database/models/InfluencerReferralVisitModel';
 
 
 const app = express();

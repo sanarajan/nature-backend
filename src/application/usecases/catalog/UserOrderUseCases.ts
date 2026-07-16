@@ -59,6 +59,24 @@ export class PlaceOrderUseCase {
             userId, influencerRef, couponCode, referralCode, addressId, useNaturePoints
         });
 
+        let resolvedInfluencerId: any = calculated.influencerApplied?._id || null;
+        let resolvedInfluencerCode: any = calculated.influencerApplied?.influencerCode || calculated.pricing?.influencerCode || null;
+        if (!resolvedInfluencerId && calculated.appliedDiscounts.influencer) {
+            const codeToFind = (influencerRef || couponCode || '').trim();
+            if (codeToFind) {
+                const inf = await UserModel.findOne({
+                    influencerCode: { $regex: new RegExp(`^${codeToFind}$`, 'i') },
+                    influencerStatus: { $in: ['Active', 'ACTIVE'] },
+                    isInfluencer: true,
+                    influencerRequestStatus: 'APPROVED'
+                });
+                if (inf) {
+                    resolvedInfluencerId = inf._id;
+                    resolvedInfluencerCode = inf.influencerCode;
+                }
+            }
+        }
+
         // Group the split products from `calculated.products` back by productId
         const orderedProductsMap: any = {};
         for (const cp of calculated.products) {
@@ -96,6 +114,17 @@ export class PlaceOrderUseCase {
                     offerName: cp.appliedProductOffer.offerName,
                     discountAmount: amt
                 };
+            }
+
+            if (cp.influencerDiscountAmount && cp.influencerDiscountAmount > 0) {
+                if (!orderedProductsMap[pId].discounts.influencerDiscount) {
+                    orderedProductsMap[pId].discounts.influencerDiscount = {
+                        influencerId: resolvedInfluencerId || null,
+                        influencerCode: resolvedInfluencerCode || null,
+                        discountAmount: 0
+                    };
+                }
+                orderedProductsMap[pId].discounts.influencerDiscount.discountAmount += Math.round(cp.influencerDiscountAmount);
             }
         }
 
@@ -137,19 +166,11 @@ export class PlaceOrderUseCase {
             }
         }
 
-        let appliedInfluencerId: any = null;
-        let appliedInfluencerCode: any = null;
+        let appliedInfluencerId: any = resolvedInfluencerId;
+        let appliedInfluencerCode: any = resolvedInfluencerCode;
         let influencerDiscountAmount = calculated.pricing.influencerDiscountAmount;
 
         const influencerSettings = await InfluencerSettingModel.findOne({ isActive: true });
-
-        if (calculated.appliedDiscounts.influencer && influencerRef) {
-             const influencer = await UserModel.findOne({ influencerCode: influencerRef });
-             if (influencer) {
-                 appliedInfluencerId = influencer._id;
-                 appliedInfluencerCode = influencer.influencerCode;
-             }
-        }
 
         let summary = "";
         if (hasComboOffer) summary += `Combo: ${appliedComboOfferName} `;
@@ -220,27 +241,60 @@ export class PlaceOrderUseCase {
         
         let influencerId: any = null;
         let influencerCode: any = null;
+        let influencerSource: 'LINK' | 'CODE' | undefined = undefined;
+        let influencerCommissionRate: number | undefined = undefined;
         let influencerCommissionAmount = 0;
         let influencerCommissionStatus: any = null;
         
-        if (!newOrder && appliedInfluencerId) {
+        if (appliedInfluencerId) {
             const influencer = await UserModel.findById(appliedInfluencerId);
             if (influencer) {
                 influencerId = appliedInfluencerId;
                 influencerCode = appliedInfluencerCode;
-                const commissionBase = Math.max(0, totalAmount - deliveryCharge);
-                // Calculate from final paid amount based on global setting
-                const commissionPercent = influencerSettings?.influencerCommissionPercent || 20;
-                influencerCommissionAmount = (commissionBase * commissionPercent) / 100;
-                
+                const activeRate = influencerSettings?.influencerCommissionPercent ?? 20;
+                influencerCommissionRate = activeRate;
+                influencerSource = (couponCode && typeof couponCode === 'string' && couponCode.trim().toUpperCase() === appliedInfluencerCode?.toUpperCase()) ? 'CODE' : 'LINK';
+
+                let totalComputedCommission = 0;
+                orderedProducts.forEach((op: any) => {
+                    const itemPayable = Number((op.finalPrice * op.quantity).toFixed(2));
+                    const itemComm = Number(((itemPayable * activeRate) / 100).toFixed(2));
+                    if (itemComm > 0) {
+                        op.influencerId = appliedInfluencerId;
+                        op.influencerCode = appliedInfluencerCode;
+                        if (!op.discounts) op.discounts = {};
+                        if (!op.discounts.influencerDiscount) {
+                            op.discounts.influencerDiscount = {
+                                influencerId: appliedInfluencerId,
+                                influencerCode: appliedInfluencerCode,
+                                discountAmount: op.influencerDiscountAmount || 0
+                            };
+                        } else {
+                            op.discounts.influencerDiscount.influencerId = appliedInfluencerId;
+                            op.discounts.influencerDiscount.influencerCode = appliedInfluencerCode;
+                        }
+                        op.influencerDiscount = op.discounts?.influencerDiscount?.discountAmount || 0;
+                        op.influencerDiscountAmount = op.discounts?.influencerDiscount?.discountAmount || 0;
+                        op.influencerCommissionRate = activeRate;
+                        op.influencerCommissionAmount = itemComm;
+                        op.influencerCommissionStatus = 'PENDING';
+                        totalComputedCommission += itemComm;
+                    }
+                });
+
+                influencerCommissionAmount = Number(totalComputedCommission.toFixed(2));
                 if (influencerCommissionAmount > 0) {
                     influencerCommissionStatus = 'PENDING';
-                    influencer.influencerPendingBalance = (influencer.influencerPendingBalance || 0) + influencerCommissionAmount;
-                    await influencer.save();
+                    if (!useExistingOrder || (useExistingOrder && !useExistingOrder.influencerCommissionAmount)) {
+                        influencer.influencerPendingBalance = Number(((influencer.influencerPendingBalance || 0) + influencerCommissionAmount).toFixed(2));
+                        await influencer.save();
+                    }
                 } else {
                     influencerId = null;
                     influencerCode = null;
                     influencerCommissionStatus = null;
+                    influencerSource = undefined;
+                    influencerCommissionRate = undefined;
                 }
             }
         }
@@ -284,12 +338,23 @@ export class PlaceOrderUseCase {
                 orderedProducts: orderedProducts,
                 influencerId: influencerId,
                 influencerCode: influencerCode,
+                influencerSource: influencerSource,
+                influencerCommissionRate: influencerCommissionRate,
                 influencerDiscountAmount: influencerDiscountAmount,
                 influencerCommissionAmount: influencerCommissionAmount,
                 influencerCommissionStatus: influencerCommissionStatus,
                 naturePointsDiscount: calculated.pricing.naturePointsDiscount,
                 naturePointsUsed: calculated.pricing.naturePointsUsed
             });
+        } else {
+            newOrder.orderedProducts = orderedProducts;
+            newOrder.influencerId = influencerId;
+            newOrder.influencerCode = influencerCode;
+            newOrder.influencerSource = influencerSource;
+            newOrder.influencerCommissionRate = influencerCommissionRate;
+            newOrder.influencerDiscountAmount = influencerDiscountAmount;
+            newOrder.influencerCommissionAmount = influencerCommissionAmount;
+            newOrder.influencerCommissionStatus = influencerCommissionStatus;
         }
 
         if (isOnline) {
@@ -303,7 +368,6 @@ export class PlaceOrderUseCase {
             cart.products = [];
             await cart.save();
 
-            // Redeem points immediately for COD
             if (newOrder.naturePointsUsed && newOrder.naturePointsUsed > 0) {
                 try {
                     const loyaltyUseCases = new UserLoyaltyUseCases();
@@ -313,6 +377,14 @@ export class PlaceOrderUseCase {
                 } catch (err) {
                     console.error('Failed to redeem points during COD checkout:', err);
                 }
+            }
+
+            try {
+                const loyaltyUseCases = new UserLoyaltyUseCases();
+                const eligibleAmount = newOrder.totalMRP - (newOrder.totalDiscount || 0) || newOrder.totalAmount;
+                await loyaltyUseCases.earnPoints(userId, eligibleAmount, newOrder.orderId);
+            } catch (err) {
+                console.error('Failed to earn points during COD checkout:', err);
             }
         }
 
@@ -396,6 +468,14 @@ export class VerifyPaymentUseCase {
             }
         }
 
+        try {
+            const loyaltyUseCases = new UserLoyaltyUseCases();
+            const eligibleAmount = order.totalMRP - (order.totalDiscount || 0) || order.totalAmount;
+            await loyaltyUseCases.earnPoints(order.userId.toString(), eligibleAmount, order.orderId);
+        } catch (err) {
+            console.error('Failed to earn points during VerifyPayment:', err);
+        }
+
         const cart = await CartModel.findOne({ user: order.userId, isActive: true });
         if (cart) {
             cart.products = [];
@@ -457,6 +537,14 @@ export class HandleRazorpayWebhookUseCase {
                     } catch (err) {
                         console.error('Failed to redeem points during webhook:', err);
                     }
+                }
+
+                try {
+                    const loyaltyUseCases = new UserLoyaltyUseCases();
+                    const eligibleAmount = order.totalMRP - (order.totalDiscount || 0) || order.totalAmount;
+                    await loyaltyUseCases.earnPoints(order.userId.toString(), eligibleAmount, order.orderId);
+                } catch (err) {
+                    console.error('Failed to earn points during webhook:', err);
                 }
 
                 const cart = await CartModel.findOne({ user: order.userId, isActive: true });
@@ -608,19 +696,35 @@ export class RequestItemCancellationUseCase {
 @injectable()
 export class RequestReturnUseCase {
     private isEligibleForReturn(item: any, order: any): boolean {
-        if (item.orderStatus !== 'Delivered') return false;
+        if (!['Delivered', 'DELIVERED', 'COMPLETED', 'Completed'].includes(item.orderStatus)) {
+            return false;
+        }
+
+        const expiryDateVal = item.returnExpiryDate || order?.returnExpiryDate;
+        if (expiryDateVal) {
+            const expiryDate = new Date(expiryDateVal);
+            if (!isNaN(expiryDate.getTime())) {
+                return Date.now() <= expiryDate.getTime();
+            }
+        }
 
         const historyEntry = order.statusHistory.slice().reverse().find((h: any) =>
             h.status.includes('Delivered') && (h.status.includes(item.productName) || h.status.includes('All Items'))
         );
 
-        if (!historyEntry) return true;
+        if (!historyEntry) {
+            const delivered = item.shippingDetails?.deliveredDate || order?.deliveredAt;
+            if (delivered) {
+                const deliveryDate = new Date(delivered);
+                if (!isNaN(deliveryDate.getTime())) {
+                    return Date.now() <= deliveryDate.getTime() + 7 * 24 * 60 * 60 * 1000;
+                }
+            }
+            return false;
+        }
 
         const deliveryDate = new Date(historyEntry.timestamp);
-        const now = new Date();
-        const diffDays = (now.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24);
-
-        return diffDays <= 7;
+        return Date.now() <= deliveryDate.getTime() + 7 * 24 * 60 * 60 * 1000;
     }
 
     async execute(userId: string, orderId: string, reason: string, remarks?: string, images?: string[]) {
@@ -678,19 +782,35 @@ export class RequestReturnUseCase {
 @injectable()
 export class RequestItemReturnUseCase {
     private isEligibleForReturn(item: any, order: any): boolean {
-        if (item.orderStatus !== 'Delivered') return false;
+        if (!['Delivered', 'DELIVERED', 'COMPLETED', 'Completed'].includes(item.orderStatus)) {
+            return false;
+        }
+
+        const expiryDateVal = item.returnExpiryDate || order?.returnExpiryDate;
+        if (expiryDateVal) {
+            const expiryDate = new Date(expiryDateVal);
+            if (!isNaN(expiryDate.getTime())) {
+                return Date.now() <= expiryDate.getTime();
+            }
+        }
 
         const historyEntry = order.statusHistory.slice().reverse().find((h: any) =>
             h.status.includes('Delivered') && (h.status.includes(item.productName) || h.status.includes('All Items'))
         );
 
-        if (!historyEntry) return true;
+        if (!historyEntry) {
+            const delivered = item.shippingDetails?.deliveredDate || order?.deliveredAt;
+            if (delivered) {
+                const deliveryDate = new Date(delivered);
+                if (!isNaN(deliveryDate.getTime())) {
+                    return Date.now() <= deliveryDate.getTime() + 7 * 24 * 60 * 60 * 1000;
+                }
+            }
+            return false;
+        }
 
         const deliveryDate = new Date(historyEntry.timestamp);
-        const now = new Date();
-        const diffDays = (now.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24);
-
-        return diffDays <= 7;
+        return Date.now() <= deliveryDate.getTime() + 7 * 24 * 60 * 60 * 1000;
     }
 
     async execute(userId: string, orderId: string, productId: string, reason: string, remarks?: string, images?: string[]) {

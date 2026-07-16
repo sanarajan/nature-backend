@@ -18,6 +18,7 @@ export interface IProductDocument extends Document {
     isTrending: boolean;
     isBestSeller: boolean;
     isActive: boolean;
+    influencerDiscount?: number;
 }
 
 const productSchema = new Schema<IProductDocument>({
@@ -37,7 +38,8 @@ const productSchema = new Schema<IProductDocument>({
     isPopular: { type: Boolean, default: false },
     isTrending: { type: Boolean, default: false },
     isBestSeller: { type: Boolean, default: false },
-    isActive: { type: Boolean, default: true }
+    isActive: { type: Boolean, default: true },
+    influencerDiscount: { type: Number, default: 0 }
 }, { timestamps: true });
 
 // Compound index to ensure uniqueness across productName, category, subcategory, unit, and quantity

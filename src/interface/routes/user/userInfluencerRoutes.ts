@@ -7,6 +7,7 @@ const router = express.Router();
 const influencerController = container.resolve(InfluencerController);
 
 router.get('/settings/public', (req, res) => influencerController.getPublicSettings(req, res));
+router.post('/track-visit', (req, res) => influencerController.trackVisit(req, res));
 
 router.use(userAuthProtect);
 

@@ -6,5 +6,9 @@ export interface IUserRepository {
     findById(id: string): Promise<User | null>;
     save(user: User): Promise<User>;
     findInfluencers(): Promise<any[]>;
+    findPendingInfluencerRequests(): Promise<any[]>;
+    findAllInfluencerRequests(): Promise<any[]>;
     findByIdAndUpdate(id: string, data: any): Promise<any | null>;
+    trackReferralVisit(code: string): Promise<boolean>;
 }
+

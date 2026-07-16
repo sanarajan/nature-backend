@@ -17,6 +17,22 @@ export class User {
         public readonly createdAt: Date = new Date(),
         public readonly updatedAt: Date = new Date(),
         public readonly isInfluencer: boolean = false,
-        public readonly influencerCode?: string
+        public readonly influencerCode?: string,
+        public readonly influencerRequestStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null,
+        public readonly influencerRequestDate?: Date,
+        public readonly influencerSocialProfiles?: {
+            facebook?: string;
+            instagram?: string;
+            youtube?: string;
+        },
+        public readonly influencerRejectionReason?: string,
+        public readonly influencerStatus: string = 'Active',
+        public readonly influencerReferralVisits: number = 0,
+        public readonly commissionPercentage?: number,
+        public readonly influencerWalletBalance?: number,
+        public readonly influencerPendingBalance?: number,
+        public readonly influencerTotalEarned?: number,
+        public readonly influencerTotalWithdrawn?: number
     ) { }
 }
+

@@ -36,6 +36,11 @@ export interface IOrderedProduct {
             offerName: string;
             discountAmount: number;
         };
+        influencerDiscount?: {
+            influencerId?: mongoose.Types.ObjectId;
+            influencerCode?: string;
+            discountAmount: number;
+        };
     };
     orderStatus: 'Pending' | 'Order Placed' | 'Processing' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Cancelled' | 'Cancellation Request' | 'Return Request' | 'Return Approved' | 'Return' | 'Returned' | 'Expired';
     shippingDetails?: {
@@ -73,6 +78,13 @@ export interface IOrderedProduct {
         rejectionReason?: string;
     };
     cancelledBy?: string;
+    influencerDiscount?: number;
+    influencerDiscountAmount?: number;
+    influencerCommissionRate?: number;
+    influencerCommissionAmount?: number;
+    influencerCommissionStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    influencerWalletTransactionId?: mongoose.Types.ObjectId;
+    returnExpiryDate?: Date;
 }
 
 export interface IOrderDocument extends Document {
@@ -109,9 +121,11 @@ export interface IOrderDocument extends Document {
     // Influencer Attribution
     influencerId?: mongoose.Types.ObjectId;
     influencerCode?: string;
+    influencerSource?: 'LINK' | 'CODE';
+    influencerCommissionRate?: number;
     influencerDiscountAmount?: number;
     influencerCommissionAmount?: number;
-    influencerCommissionStatus?: 'PENDING' | 'APPROVED' | 'CANCELLED' | 'EXPIRED';
+    influencerCommissionStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
     
     // Loyalty Rewards
     naturePointsUsed?: number;
@@ -200,8 +214,23 @@ const orderSchema = new Schema<IOrderDocument>({
                 offerId: { type: Schema.Types.ObjectId, ref: 'ComboOffer', default: null },
                 offerName: { type: String, default: null },
                 discountAmount: { type: Number, default: 0 }
+            },
+            influencerDiscount: {
+                influencerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+                influencerCode: { type: String, default: null },
+                discountAmount: { type: Number, default: 0 }
             }
         },
+        influencerDiscount: { type: Number, default: 0 },
+        influencerDiscountAmount: { type: Number, default: 0 },
+        influencerCommissionRate: { type: Number },
+        influencerCommissionAmount: { type: Number },
+        influencerCommissionStatus: { 
+            type: String, 
+            enum: ['PENDING', 'APPROVED', 'REJECTED'] 
+        },
+        influencerWalletTransactionId: { type: Schema.Types.ObjectId, ref: 'Wallet' },
+        returnExpiryDate: { type: Date },
         orderStatus: {
             type: String, enum: ['Pending', 'Order Placed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Cancellation Request', 'Return Request', 'Return Approved', 'Return', 'Returned', 'Expired'],
             default: 'Order Placed'
@@ -254,11 +283,13 @@ const orderSchema = new Schema<IOrderDocument>({
     // Influencer Attribution
     influencerId: { type: Schema.Types.ObjectId, ref: 'User' },
     influencerCode: { type: String },
+    influencerSource: { type: String, enum: ['LINK', 'CODE'] },
+    influencerCommissionRate: { type: Number },
     influencerDiscountAmount: { type: Number, default: 0 },
     influencerCommissionAmount: { type: Number },
     influencerCommissionStatus: { 
         type: String, 
-        enum: ['PENDING', 'APPROVED', 'CANCELLED', 'EXPIRED']
+        enum: ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED']
     },
 
     // Loyalty Rewards
@@ -346,13 +377,67 @@ orderSchema.pre('save', function (next) {
         this.markModified('cancelledAmount');
         this.markModified('returnedAmount');
 
-        // Set returnExpiryDate and deliveredAt if status is DELIVERED and not previously set
-        if (this.globalOrderStatus === 'DELIVERED' && !this.deliveredAt) {
-            this.deliveredAt = new Date();
-            const returnDays = 7; // Configurable window (default 7 days)
-            const expiry = new Date(this.deliveredAt);
-            expiry.setDate(expiry.getDate() + returnDays);
-            this.returnExpiryDate = expiry;
+        // Set returnExpiryDate and deliveredAt if status is DELIVERED/Delivered and not previously set
+        if (['DELIVERED', 'Delivered', 'COMPLETED', 'Completed'].includes(this.globalOrderStatus)) {
+            if (!this.deliveredAt) {
+                this.deliveredAt = new Date();
+            }
+            if (!this.returnExpiryDate) {
+                const returnDays = 7; // Configurable window (default 7 days)
+                const expiry = new Date(this.deliveredAt);
+                expiry.setDate(expiry.getDate() + returnDays);
+                this.returnExpiryDate = expiry;
+            }
+        }
+
+        // Product-level return expiry date and commission status sync
+        this.orderedProducts.forEach(p => {
+            if (['Delivered', 'DELIVERED', 'COMPLETED', 'Completed'].includes(p.orderStatus) || ['DELIVERED', 'Delivered', 'COMPLETED', 'Completed'].includes(this.globalOrderStatus)) {
+                if (!p.returnExpiryDate) {
+                    const delivered = p.shippingDetails?.deliveredDate || this.deliveredAt || new Date();
+                    const expiry = new Date(delivered);
+                    expiry.setDate(expiry.getDate() + 7);
+                    p.returnExpiryDate = expiry;
+                }
+            }
+        });
+
+        if (this.influencerId || this.influencerCode || (this.orderedProducts && this.orderedProducts.some(p => p.influencerCommissionAmount && p.influencerCommissionAmount > 0))) {
+            let allRejectedOrCancelled = true;
+            let anyApproved = false;
+            let anyPending = false;
+            let hasInfluencerProducts = false;
+
+            this.orderedProducts.forEach(p => {
+                if (p.influencerCommissionAmount && p.influencerCommissionAmount > 0) {
+                    hasInfluencerProducts = true;
+                    if (['Cancelled', 'Returned', 'Expired'].includes(p.orderStatus) && p.influencerCommissionStatus === 'PENDING') {
+                        p.influencerCommissionStatus = 'REJECTED';
+                    }
+                    if (p.influencerCommissionStatus === 'APPROVED') anyApproved = true;
+                    else if (p.influencerCommissionStatus === 'PENDING') anyPending = true;
+
+                    if ((p.influencerCommissionStatus as string) !== 'REJECTED' && (p.influencerCommissionStatus as string) !== 'CANCELLED') {
+                        allRejectedOrCancelled = false;
+                    }
+                }
+            });
+
+            if (hasInfluencerProducts) {
+                if (allRejectedOrCancelled) {
+                    this.influencerCommissionStatus = 'REJECTED';
+                } else if (!anyPending && anyApproved) {
+                    this.influencerCommissionStatus = 'APPROVED';
+                } else if (anyPending) {
+                    this.influencerCommissionStatus = 'PENDING';
+                }
+            } else if (this.influencerCommissionAmount && this.influencerCommissionAmount > 0) {
+                if (['Cancelled', 'CANCELLED', 'Returned', 'RETURNED', 'Expired', 'EXPIRED'].includes(this.globalOrderStatus) && this.influencerCommissionStatus === 'PENDING') {
+                    this.influencerCommissionStatus = 'REJECTED';
+                } else if (!this.influencerCommissionStatus) {
+                    this.influencerCommissionStatus = 'PENDING';
+                }
+            }
         }
     } catch (err) {
         console.error('[HOOK_ERROR] Failed to update global status or amounts:', err);

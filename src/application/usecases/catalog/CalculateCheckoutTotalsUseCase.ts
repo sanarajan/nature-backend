@@ -36,7 +36,6 @@ export class CalculateCheckoutTotalsUseCase {
             useNaturePoints
         });
 
-        // CalculateCheckoutTotals expects pricing at the top level
         return {
             originalPrice: calculated.pricing.originalPrice,
             deliveryCharge: calculated.pricing.deliveryCharge,
@@ -46,11 +45,14 @@ export class CalculateCheckoutTotalsUseCase {
             appliedDiscounts: calculated.appliedDiscounts,
             influencerDiscount: calculated.influencerDiscount,
             influencerApplied: calculated.influencerApplied,
+            influencerCode: calculated.pricing.influencerCode,
             discountType: calculated.discountType,
             total: calculated.total,
             subtotal: calculated.subtotal,
             naturePointsDiscount: calculated.pricing.naturePointsDiscount,
-            naturePointsUsed: calculated.pricing.naturePointsUsed
+            naturePointsUsed: calculated.pricing.naturePointsUsed,
+            naturePointsEligibility: calculated.pricing.naturePointsEligibility,
+            products: calculated.products
         };
     }
 }

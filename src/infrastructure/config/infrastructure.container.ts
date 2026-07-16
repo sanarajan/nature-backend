@@ -37,6 +37,8 @@ import { IReferralSettingRepository } from '../../domain/repositories/IReferralS
 import { ReferralSettingRepository } from '../database/repositories/ReferralSettingRepository';
 import { IInfluencerSettingRepository } from '../../domain/repositories/IInfluencerSettingRepository';
 import { InfluencerSettingRepository } from '../database/repositories/InfluencerSettingRepository';
+import { IInfluencerReferralVisitRepository } from '../../domain/repositories/IInfluencerReferralVisitRepository';
+import { InfluencerReferralVisitRepository } from '../database/repositories/InfluencerReferralVisitRepository';
 
 import { EmailService } from '../services/EmailService';
 import { JwtService } from '../services/JwtService';
@@ -64,6 +66,7 @@ import { RazorpayService } from '../services/RazorpayService';
     container.registerSingleton<IAddressRepository>('IAddressRepository', AddressRepository);
     container.registerSingleton<IReferralSettingRepository>('IReferralSettingRepository', ReferralSettingRepository);
     container.registerSingleton<IInfluencerSettingRepository>('IInfluencerSettingRepository', InfluencerSettingRepository);
+    container.registerSingleton<IInfluencerReferralVisitRepository>('IInfluencerReferralVisitRepository', InfluencerReferralVisitRepository);
 
     // Services
     container.registerSingleton<EmailService>('IEmailService', EmailService);

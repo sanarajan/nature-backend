@@ -2,6 +2,7 @@ export interface IOrderRepository {
     findRecentOrdersByInfluencerId(influencerId: string, limit?: number): Promise<any[]>;
     countByInfluencerId(influencerId: string): Promise<number>;
     findCompletedByInfluencerId(influencerId: string): Promise<any[]>;
+    getInfluencerAnalytics(influencerId: string): Promise<any>;
     createOrder(data: any): Promise<any>;
     findOrderById(id: string): Promise<any>;
     findOrderByIdAndUserId(id: string, userId: string): Promise<any>;

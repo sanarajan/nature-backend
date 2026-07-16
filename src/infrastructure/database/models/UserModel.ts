@@ -26,7 +26,18 @@ export interface IUserDocument extends Document {
     influencerPendingBalance?: number;
     influencerTotalEarned?: number;
     influencerTotalWithdrawn?: number;
-    influencerStatus?: 'Active' | 'Inactive';
+    influencerReferralVisits?: number;
+    influencerStatus?: string;
+    
+    // Influencer Request Fields
+    influencerRequestStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
+    influencerRequestDate?: Date;
+    influencerSocialProfiles?: {
+        facebook?: string;
+        instagram?: string;
+        youtube?: string;
+    };
+    influencerRejectionReason?: string;
     
     createdAt: Date;
     updatedAt: Date;
@@ -56,7 +67,18 @@ const userSchema = new Schema<IUserDocument>({
     influencerPendingBalance: { type: Number, default: 0 },
     influencerTotalEarned: { type: Number, default: 0 },
     influencerTotalWithdrawn: { type: Number, default: 0 },
-    influencerStatus: { type: String, enum: ['Active', 'Inactive'], default: 'Active' }
+    influencerReferralVisits: { type: Number, default: 0 },
+    influencerStatus: { type: String, enum: ['Active', 'Inactive', 'Blocked', 'ACTIVE', 'INACTIVE', 'BLOCKED', 'PENDING', 'REJECTED'], default: 'Active' },
+    
+    // Influencer Request Fields
+    influencerRequestStatus: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED'], default: null },
+    influencerRequestDate: { type: Date },
+    influencerSocialProfiles: {
+        facebook: { type: String },
+        instagram: { type: String },
+        youtube: { type: String }
+    },
+    influencerRejectionReason: { type: String }
 }, { timestamps: true });
 
 // Hash password before saving

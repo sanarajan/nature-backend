@@ -218,5 +218,56 @@ export class EmailService implements IEmailService {
             throw new Error('Failed to send influencer rejection email');
         }
     }
+
+    async sendStaffCredentialsEmail(email: string, name: string, password: string): Promise<void> {
+        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const loginUrl = `${clientUrl}/admin`;
+
+        const mailOptions = {
+            from: process.env.EMAIL_FROM || 'noreply@naturalayam.com',
+            to: email,
+            subject: 'Naturalayam Staff Account Registered',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+                    <h2 style="color: #4CAF50;">Welcome to Naturalayam!</h2>
+                    <p>Dear ${name},</p>
+                    <p>Congratulations! You have been successfully registered as a Staff member of Naturalayam.</p>
+                    <p>You can log in to the admin panel using the following credentials:</p>
+                    <table style="width: 100%; max-width: 450px; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px;">
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f9f9f9; width: 150px;">Login URL:</td>
+                            <td style="padding: 8px; border: 1px solid #ddd;"><a href="${loginUrl}" target="_blank">${loginUrl}</a></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f9f9f9;">Username (Email):</td>
+                            <td style="padding: 8px; border: 1px solid #ddd;">${email}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f9f9f9;">Password:</td>
+                            <td style="padding: 8px; border: 1px solid #ddd;"><code style="font-size: 1.1rem; background-color: #f1f1f1; padding: 2px 6px; border-radius: 4px; color: #d32f2f;">${password}</code></td>
+                        </tr>
+                    </table>
+                    <p>Please note that your email address is your login username.</p>
+                    <p>Best regards,<br/>The Naturalayam Team</p>
+                </div>
+            `,
+        };
+
+        try {
+            if (process.env.EMAIL_USER) {
+                await this.transporter.sendMail(mailOptions);
+                console.log(`Staff credentials email sent to ${email}`);
+            } else {
+                console.log(`[DEV MODE] Staff Credentials Email for ${email}:\n Username => ${email}\n Password => ${password}\n URL => ${loginUrl}`);
+            }
+        } catch (error) {
+            console.error('Error sending staff credentials email:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`[DEV MODE] Staff Credentials Email for ${email}:\n Username => ${email}\n Password => ${password}\n URL => ${loginUrl}`);
+                return;
+            }
+            throw new Error('Failed to send staff registration credentials email');
+        }
+    }
 }
 

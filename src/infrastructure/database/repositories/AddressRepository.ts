@@ -24,4 +24,17 @@ export class AddressRepository implements IAddressRepository {
     async deleteAddress(id: string): Promise<any> {
         return await AddressModel.findByIdAndDelete(id);
     }
+
+    async findById(id: string): Promise<any | null> {
+        return await AddressModel.findById(id);
+    }
+
+    async save(addressData: any): Promise<any> {
+        if (addressData._id) {
+            return await AddressModel.findByIdAndUpdate(addressData._id, addressData, { new: true });
+        } else {
+            const address = new AddressModel(addressData);
+            return await address.save();
+        }
+    }
 }

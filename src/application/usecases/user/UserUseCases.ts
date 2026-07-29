@@ -7,17 +7,32 @@ import {
     IGetStatesUseCase
 } from '../../interfaces/user/IUserUseCases';
 import { IUserRepository } from '../../../domain/repositories/IUserRepository';
+import { IStaffRepository } from '../../../domain/repositories/IStaffRepository';
 import { IAddressRepository, IStateRepository } from '../../../domain/repositories/ILocationRepository';
 import { NotFoundError } from '../../../shared/utils/AppError';
 import cloudinary from '../../../infrastructure/config/cloudinary';
 
 @injectable()
 export class GetMeUseCase implements IGetMeUseCase {
-    constructor(@inject('IUserRepository') private userRepository: IUserRepository) {}
+    constructor(
+        @inject('IUserRepository') private userRepository: IUserRepository,
+        @inject('IStaffRepository') private staffRepository: IStaffRepository
+    ) {}
 
     async execute(userId: string): Promise<any> {
         const user = await this.userRepository.findById(userId);
         if (!user) {
+            const staff = await this.staffRepository.findById(userId);
+            if (staff) {
+                return {
+                    id: staff.id,
+                    name: staff.name,
+                    email: staff.email,
+                    role: 'STAFF',
+                    status: staff.status,
+                    isBlocked: staff.isBlocked
+                };
+            }
             throw new NotFoundError('User not found');
         }
         
@@ -97,13 +112,10 @@ export class AddOrUpdateAddressUseCase implements IAddOrUpdateAddressUseCase {
 
         const savedAddress = await this.addressRepository.save(address);
 
-        if (!addressData._id) {
-            // Need to update User document to include this address _id
-            // Since User entity doesn't directly manage save of references,
-            // we have to update it in the repository.
-            // For now, let's append and save user.
-            (user as any).addresses.push(savedAddress);
-            await this.userRepository.save(user);
+        if (!addressData._id && savedAddress?._id) {
+            await this.userRepository.findByIdAndUpdate(userId, {
+                $addToSet: { address_ids: savedAddress._id }
+            });
         }
 
         return savedAddress;

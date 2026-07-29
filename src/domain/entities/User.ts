@@ -30,9 +30,16 @@ export class User {
         public readonly influencerReferralVisits: number = 0,
         public readonly commissionPercentage?: number,
         public readonly influencerWalletBalance?: number,
+        public readonly influencerWithdrawalHold?: number,
+        public readonly withdrawalHold?: number,
         public readonly influencerPendingBalance?: number,
         public readonly influencerTotalEarned?: number,
-        public readonly influencerTotalWithdrawn?: number
+        public readonly influencerTotalWithdrawn?: number,
+        public readonly accountHolderName?: string,
+        public readonly bankName?: string,
+        public readonly accountNumber?: string,
+        public readonly ifscCode?: string,
+        public readonly upiId?: string
     ) { }
 }
 

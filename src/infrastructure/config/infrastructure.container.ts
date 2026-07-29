@@ -39,6 +39,8 @@ import { IInfluencerSettingRepository } from '../../domain/repositories/IInfluen
 import { InfluencerSettingRepository } from '../database/repositories/InfluencerSettingRepository';
 import { IInfluencerReferralVisitRepository } from '../../domain/repositories/IInfluencerReferralVisitRepository';
 import { InfluencerReferralVisitRepository } from '../database/repositories/InfluencerReferralVisitRepository';
+import { IStaffRepository } from '../../domain/repositories/IStaffRepository';
+import { StaffRepository } from '../database/repositories/StaffRepository';
 
 import { EmailService } from '../services/EmailService';
 import { JwtService } from '../services/JwtService';
@@ -60,6 +62,7 @@ import { RazorpayService } from '../services/RazorpayService';
     container.registerSingleton<IOfferRepository>('IOfferRepository', OfferRepository);
     container.registerSingleton<IComboOfferRepository>('IComboOfferRepository', ComboOfferRepository);
     container.registerSingleton<IUnitRepository>('IUnitRepository', UnitRepository);
+    container.registerSingleton<IStaffRepository>('IStaffRepository', StaffRepository);
 
     container.registerSingleton<IShippingAgencyRepository>('IShippingAgencyRepository', ShippingAgencyRepository);
     container.registerSingleton<IShippingChargeRepository>('IShippingChargeRepository', ShippingChargeRepository);

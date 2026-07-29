@@ -11,11 +11,23 @@ export interface IUpdateInfluencerUseCase {
 }
 
 export interface IGetWithdrawalRequestsUseCase {
-    execute(): Promise<any[]>;
+    execute(query?: { search?: string; status?: string; page?: number; limit?: number }): Promise<any>;
 }
 
 export interface IProcessWithdrawalUseCase {
-    execute(id: string, status: string, remarks: string): Promise<any>;
+    execute(id: string, status: string, remarks?: string, reason?: string, transactionReference?: string): Promise<any>;
+}
+
+export interface IApproveWithdrawalUseCase {
+    execute(id: string, remarks?: string): Promise<any>;
+}
+
+export interface IRejectWithdrawalUseCase {
+    execute(id: string, reason: string): Promise<any>;
+}
+
+export interface IMarkWithdrawalPaidUseCase {
+    execute(id: string, transactionReference?: string, remarks?: string): Promise<any>;
 }
 
 export interface IGetInfluencerRequestsUseCase {

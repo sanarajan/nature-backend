@@ -4,4 +4,6 @@ export interface IAddressRepository {
     findAddressesByUserId(userId: string): Promise<any[]>;
     updateAddress(id: string, data: any): Promise<any>;
     deleteAddress(id: string): Promise<any>;
+    findById(id: string): Promise<any | null>;
+    save(address: any): Promise<any>;
 }

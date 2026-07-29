@@ -5,6 +5,7 @@ export interface IInfluencerSettingDocument extends Document {
     influencerCommissionPercent: number;
     referralCookieDays: number;
     influencerEnabled: boolean;
+    minWithdrawalAmount: number;
     isActive: boolean; // Only one active document usually
     createdAt: Date;
     updatedAt: Date;
@@ -15,6 +16,7 @@ const influencerSettingSchema = new Schema<IInfluencerSettingDocument>({
     influencerCommissionPercent: { type: Number, default: 20 },
     referralCookieDays: { type: Number, default: 30 },
     influencerEnabled: { type: Boolean, default: true },
+    minWithdrawalAmount: { type: Number, default: 500 },
     isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 

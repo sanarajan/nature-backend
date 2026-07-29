@@ -26,16 +26,20 @@ export const adminAuthProtect = async (
         const payload = await authService.verifyAccessToken(token);
 
         // Explicit Role Check
-        if (payload.role.toUpperCase() !== 'ADMIN') {
-            res.status(403).json({ success: false, message: 'Forbidden: Admin access required' });
+        const payloadRole = payload.role.toUpperCase();
+        if (payloadRole !== 'ADMIN' && payloadRole !== 'STAFF') {
+            res.status(403).json({ success: false, message: 'Forbidden: Admin or Staff access required' });
             return;
         }
 
         // Explicit Role Header Check
         const roleHeader = req.headers['role'] as string;
-        if (roleHeader && roleHeader.toLowerCase() !== 'admin') {
-            res.status(403).json({ success: false, message: 'Unauthorized: Role mismatch' });
-            return;
+        if (roleHeader) {
+            const rh = roleHeader.toLowerCase();
+            if (rh !== 'admin' && rh !== 'staff') {
+                res.status(403).json({ success: false, message: 'Unauthorized: Role mismatch' });
+                return;
+            }
         }
 
         (req as any).user = payload;
@@ -45,3 +49,13 @@ export const adminAuthProtect = async (
         res.status(401).json({ success: false, message: 'Access token invalid or expired' });
     }
 };
+
+export const adminOnly = (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user;
+    if (user && user.role && user.role.toUpperCase() === 'ADMIN') {
+        next();
+    } else {
+        res.status(403).json({ success: false, message: 'Forbidden: Admin access required' });
+    }
+};
+

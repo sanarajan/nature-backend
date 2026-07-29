@@ -45,6 +45,7 @@ export class CalculateCheckoutTotalsUseCase {
             appliedDiscounts: calculated.appliedDiscounts,
             influencerDiscount: calculated.influencerDiscount,
             influencerApplied: calculated.influencerApplied,
+            influencerEligibility: calculated.pricing.influencerEligibility || calculated.influencerEligibility,
             influencerCode: calculated.pricing.influencerCode,
             discountType: calculated.discountType,
             total: calculated.total,

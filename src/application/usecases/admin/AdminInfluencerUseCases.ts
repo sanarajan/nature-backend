@@ -5,6 +5,9 @@ import {
     IUpdateInfluencerUseCase,
     IGetWithdrawalRequestsUseCase,
     IProcessWithdrawalUseCase,
+    IApproveWithdrawalUseCase,
+    IRejectWithdrawalUseCase,
+    IMarkWithdrawalPaidUseCase,
     IGetInfluencerRequestsUseCase,
     IApproveInfluencerRequestUseCase,
     IRejectInfluencerRequestUseCase,
@@ -106,45 +109,232 @@ export class UpdateInfluencerUseCase implements IUpdateInfluencerUseCase {
 
 @injectable()
 export class GetWithdrawalRequestsUseCase implements IGetWithdrawalRequestsUseCase {
-    constructor(@inject('IWithdrawalRequestRepository') private withdrawalRequestRepository: IWithdrawalRequestRepository) {}
+    constructor(
+        @inject('IWithdrawalRequestRepository') private withdrawalRequestRepository: IWithdrawalRequestRepository,
+        @inject('IUserRepository') private userRepository: IUserRepository
+    ) {}
 
-    async execute(): Promise<any[]> {
-        return this.withdrawalRequestRepository.findAllWithInfluencer();
+    async execute(query: { search?: string; status?: string; page?: number; limit?: number } = {}): Promise<any> {
+        const pageNum = Math.max(1, Number(query.page) || 1);
+        const limitNum = Math.max(1, Number(query.limit) || 10);
+        const skip = (pageNum - 1) * limitNum;
+
+        const filter: any = {};
+        if (query.status && query.status !== 'ALL' && query.status !== 'All') {
+            filter.status = query.status;
+        }
+
+        if (query.search && query.search.trim()) {
+            const searchTerm = query.search.trim();
+            const searchRegex = new RegExp(searchTerm, 'i');
+
+            // Find matching influencers by name or email
+            const matchedUsers = await (this.userRepository as any).findInfluencers();
+            const matchingUserIds = matchedUsers
+                .filter((u: any) => searchRegex.test(u.displayName || '') || searchRegex.test(u.username || '') || searchRegex.test(u.email || ''))
+                .map((u: any) => u._id);
+
+            filter.$or = [
+                { requestId: searchRegex },
+                { influencerId: { $in: matchingUserIds } }
+            ];
+        }
+
+        const requests = await this.withdrawalRequestRepository.findAllWithInfluencer(filter, limitNum, skip, { createdAt: -1 });
+        const total = await this.withdrawalRequestRepository.countAllWithInfluencer(filter);
+
+        return {
+            requests,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                pages: Math.ceil(total / limitNum) || 1
+            }
+        };
+    }
+}
+
+@injectable()
+export class ApproveWithdrawalUseCase implements IApproveWithdrawalUseCase {
+    constructor(
+        @inject('IWithdrawalRequestRepository') private withdrawalRequestRepository: IWithdrawalRequestRepository
+    ) {}
+
+    async execute(id: string, remarks?: string): Promise<any> {
+        const request = await this.withdrawalRequestRepository.findByIdWithInfluencer(id);
+        if (!request) throw new NotFoundError('Withdrawal request not found');
+        if (request.status !== 'Pending') {
+            throw new ValidationError(`Cannot approve request with status '${request.status}'`);
+        }
+
+        request.status = 'Approved';
+        request.approvedAt = new Date();
+        if (remarks) {
+            request.adminRemarks = remarks;
+            request.remarks = remarks;
+        }
+        await this.withdrawalRequestRepository.save(request);
+
+        // User Notification
+        try {
+            const infId = request.influencerId?._id || request.influencerId;
+            const { UserNotificationModel } = await import('../../../infrastructure/database/models/UserNotificationModel.js');
+            await UserNotificationModel.create({
+                userId: infId,
+                title: 'Withdrawal Request Approved',
+                message: 'Good news!\nYour withdrawal request has been approved.\nOur finance team will manually transfer the payment to your registered bank account.\nYou will receive another update once the payment has been completed.',
+                type: 'WITHDRAWAL',
+                isRead: false,
+                metadata: { requestId: request.requestId, amount: request.amount, status: 'Approved' }
+            });
+        } catch (e) {
+            console.error('Error sending user approval notification:', e);
+        }
+
+        return request;
+    }
+}
+
+@injectable()
+export class RejectWithdrawalUseCase implements IRejectWithdrawalUseCase {
+    constructor(
+        @inject('IWithdrawalRequestRepository') private withdrawalRequestRepository: IWithdrawalRequestRepository,
+        @inject('IUserRepository') private userRepository: IUserRepository
+    ) {}
+
+    async execute(id: string, reason: string): Promise<any> {
+        if (!reason || !reason.trim()) {
+            throw new ValidationError('Rejection reason is mandatory.');
+        }
+
+        const request = await this.withdrawalRequestRepository.findByIdWithInfluencer(id);
+        if (!request) throw new NotFoundError('Withdrawal request not found');
+        if (['Paid', 'Rejected'].includes(request.status)) {
+            throw new ValidationError(`Cannot reject request already in status '${request.status}'`);
+        }
+
+        const infId = request.influencerId?._id ? request.influencerId._id.toString() : request.influencerId.toString();
+
+        // Move funds back from Withdrawal Hold to Wallet Balance
+        const user = await this.userRepository.findById(infId);
+        if (user) {
+            const currentWallet = (user as any).influencerWalletBalance || 0;
+            const currentHold = (user as any).influencerWithdrawalHold || (user as any).withdrawalHold || 0;
+
+            const newWallet = currentWallet + request.amount;
+            const newHold = Math.max(0, currentHold - request.amount);
+
+            await this.userRepository.findByIdAndUpdate(infId, {
+                influencerWalletBalance: newWallet,
+                influencerWithdrawalHold: newHold,
+                withdrawalHold: newHold
+            });
+        }
+
+        request.status = 'Rejected';
+        request.rejectedAt = new Date();
+        request.reason = reason.trim();
+        request.adminRemarks = reason.trim();
+        await this.withdrawalRequestRepository.save(request);
+
+        // User Notification
+        try {
+            const { UserNotificationModel } = await import('../../../infrastructure/database/models/UserNotificationModel.js');
+            await UserNotificationModel.create({
+                userId: infId,
+                title: 'Withdrawal Request Rejected',
+                message: `Unfortunately your withdrawal request has been rejected.\nReason:\n${reason.trim()}\nPlease update your bank details or resolve the issue and submit a new withdrawal request.`,
+                type: 'WITHDRAWAL',
+                isRead: false,
+                metadata: { requestId: request.requestId, amount: request.amount, status: 'Rejected', reason: reason.trim() }
+            });
+        } catch (e) {
+            console.error('Error sending user rejection notification:', e);
+        }
+
+        return request;
+    }
+}
+
+@injectable()
+export class MarkWithdrawalPaidUseCase implements IMarkWithdrawalPaidUseCase {
+    constructor(
+        @inject('IWithdrawalRequestRepository') private withdrawalRequestRepository: IWithdrawalRequestRepository,
+        @inject('IUserRepository') private userRepository: IUserRepository
+    ) {}
+
+    async execute(id: string, transactionReference?: string, remarks?: string): Promise<any> {
+        const request = await this.withdrawalRequestRepository.findByIdWithInfluencer(id);
+        if (!request) throw new NotFoundError('Withdrawal request not found');
+        if (request.status === 'Paid') {
+            throw new ValidationError('Withdrawal request has already been marked as Paid.');
+        }
+
+        const infId = request.influencerId?._id ? request.influencerId._id.toString() : request.influencerId.toString();
+
+        // Move funds: Withdrawal Hold -> 0, Total Withdrawn ↑
+        const user = await this.userRepository.findById(infId);
+        if (user) {
+            const currentHold = (user as any).influencerWithdrawalHold || (user as any).withdrawalHold || 0;
+            const currentWithdrawn = (user as any).influencerTotalWithdrawn || 0;
+
+            const newHold = Math.max(0, currentHold - request.amount);
+            const newWithdrawn = currentWithdrawn + request.amount;
+
+            await this.userRepository.findByIdAndUpdate(infId, {
+                influencerWithdrawalHold: newHold,
+                withdrawalHold: newHold,
+                influencerTotalWithdrawn: newWithdrawn
+            });
+        }
+
+        request.status = 'Paid';
+        request.paidAt = new Date();
+        if (transactionReference) request.transactionReference = transactionReference.trim();
+        if (remarks) {
+            request.remarks = remarks.trim();
+            request.adminRemarks = remarks.trim();
+        }
+        await this.withdrawalRequestRepository.save(request);
+
+        // User Notification
+        try {
+            const { UserNotificationModel } = await import('../../../infrastructure/database/models/UserNotificationModel.js');
+            await UserNotificationModel.create({
+                userId: infId,
+                title: 'Withdrawal Completed',
+                message: 'Congratulations!\nYour withdrawal request has been successfully completed.\nThe payment has been transferred to your registered bank account.\nThank you.',
+                type: 'WITHDRAWAL',
+                isRead: false,
+                metadata: { requestId: request.requestId, amount: request.amount, status: 'Paid', transactionReference: transactionReference?.trim() }
+            });
+        } catch (e) {
+            console.error('Error sending user paid notification:', e);
+        }
+
+        return request;
     }
 }
 
 @injectable()
 export class ProcessWithdrawalUseCase implements IProcessWithdrawalUseCase {
     constructor(
-        @inject('IWithdrawalRequestRepository') private withdrawalRequestRepository: IWithdrawalRequestRepository,
-        @inject('IUserRepository') private userRepository: IUserRepository
+        @inject('IApproveWithdrawalUseCase') private approveUseCase: IApproveWithdrawalUseCase,
+        @inject('IRejectWithdrawalUseCase') private rejectUseCase: IRejectWithdrawalUseCase,
+        @inject('IMarkWithdrawalPaidUseCase') private markPaidUseCase: IMarkWithdrawalPaidUseCase
     ) {}
 
-    async execute(id: string, status: string, remarks: string): Promise<any> {
-        const request = await this.withdrawalRequestRepository.findByIdWithInfluencer(id);
-        if (!request) throw new NotFoundError('Request not found');
-        if (request.status !== 'Pending') throw new ValidationError('Already processed');
-
-        const influencer: any = request.influencerId; // This is populated
-
+    async execute(id: string, status: string, remarks?: string, reason?: string, transactionReference?: string): Promise<any> {
         if (status === 'Approved') {
-            if (['INACTIVE', 'Inactive', 'BLOCKED', 'Blocked'].includes(influencer.influencerStatus)) {
-                throw new ValidationError(`Cannot approve withdrawal for an influencer whose status is ${influencer.influencerStatus}`);
-            }
-            if (influencer.influencerWalletBalance < request.amount) {
-                throw new ValidationError('Insufficient wallet balance');
-            }
-            influencer.influencerWalletBalance -= request.amount;
-            influencer.influencerTotalWithdrawn = (influencer.influencerTotalWithdrawn || 0) + request.amount;
-            await this.userRepository.save(influencer); // Using existing save method from repository
+            return this.approveUseCase.execute(id, remarks);
+        } else if (status === 'Rejected') {
+            return this.rejectUseCase.execute(id, reason || remarks || 'Rejected by Admin');
+        } else if (status === 'Paid') {
+            return this.markPaidUseCase.execute(id, transactionReference, remarks);
+        } else {
+            throw new ValidationError(`Invalid withdrawal status transition '${status}'`);
         }
-
-        request.status = status;
-        request.adminRemarks = remarks;
-        request.processedAt = new Date();
-        await this.withdrawalRequestRepository.save(request);
-
-        return request;
     }
 }
 

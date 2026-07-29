@@ -23,11 +23,20 @@ export interface IUserDocument extends Document {
     influencerCode?: string;
     commissionPercentage?: number;
     influencerWalletBalance?: number;
+    influencerWithdrawalHold?: number;
+    withdrawalHold?: number;
     influencerPendingBalance?: number;
     influencerTotalEarned?: number;
     influencerTotalWithdrawn?: number;
     influencerReferralVisits?: number;
     influencerStatus?: string;
+    
+    // Bank Details
+    accountHolderName?: string;
+    bankName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    upiId?: string;
     
     // Influencer Request Fields
     influencerRequestStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
@@ -64,11 +73,20 @@ const userSchema = new Schema<IUserDocument>({
     influencerCode: { type: String, unique: true, sparse: true },
     commissionPercentage: { type: Number, default: 0 },
     influencerWalletBalance: { type: Number, default: 0 },
+    influencerWithdrawalHold: { type: Number, default: 0 },
+    withdrawalHold: { type: Number, default: 0 },
     influencerPendingBalance: { type: Number, default: 0 },
     influencerTotalEarned: { type: Number, default: 0 },
     influencerTotalWithdrawn: { type: Number, default: 0 },
     influencerReferralVisits: { type: Number, default: 0 },
     influencerStatus: { type: String, enum: ['Active', 'Inactive', 'Blocked', 'ACTIVE', 'INACTIVE', 'BLOCKED', 'PENDING', 'REJECTED'], default: 'Active' },
+    
+    // Bank Details
+    accountHolderName: { type: String, default: '' },
+    bankName: { type: String, default: '' },
+    accountNumber: { type: String, default: '' },
+    ifscCode: { type: String, default: '' },
+    upiId: { type: String, default: '' },
     
     // Influencer Request Fields
     influencerRequestStatus: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED'], default: null },

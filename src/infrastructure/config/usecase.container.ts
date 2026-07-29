@@ -27,7 +27,11 @@ import {
 import {
     GetInfluencerDashboardUseCase,
     RequestWithdrawalUseCase,
-    UpgradeToInfluencerUseCase
+    UpgradeToInfluencerUseCase,
+    UpdateBankDetailsUseCase,
+    GetWithdrawalHistoryUseCase,
+    GetWithdrawalDetailsUseCase,
+    GetUserNotificationsUseCase
 } from '../../application/usecases/user/InfluencerUseCases';
 import { TrackReferralVisitUseCase } from '../../application/usecases/user/TrackReferralVisitUseCase';
 import { GetWalletUseCase } from '../../application/usecases/user/WalletUseCases';
@@ -38,9 +42,12 @@ import {
     UpdateInfluencerUseCase,
     GetWithdrawalRequestsUseCase,
     ProcessWithdrawalUseCase,
+    ApproveWithdrawalUseCase,
+    RejectWithdrawalUseCase,
+    MarkWithdrawalPaidUseCase,
     GetInfluencerRequestsUseCase,
     ApproveInfluencerRequestUseCase,
-    RejectInfluencerRequestUseCase,
+    RejectInfluencerRequestUseCase as RejectInfluencerApplicationUseCase,
     GetInfluencerProductsUseCase,
     UpdateProductInfluencerDiscountUseCase
 } from '../../application/usecases/admin/AdminInfluencerUseCases';
@@ -86,6 +93,10 @@ container.registerSingleton<GetInfluencerDashboardUseCase>('IGetInfluencerDashbo
 container.registerSingleton<RequestWithdrawalUseCase>('IRequestWithdrawalUseCase', RequestWithdrawalUseCase);
 container.registerSingleton<UpgradeToInfluencerUseCase>('IUpgradeToInfluencerUseCase', UpgradeToInfluencerUseCase);
 container.registerSingleton<TrackReferralVisitUseCase>('ITrackReferralVisitUseCase', TrackReferralVisitUseCase);
+container.registerSingleton<UpdateBankDetailsUseCase>('IUpdateBankDetailsUseCase', UpdateBankDetailsUseCase);
+container.registerSingleton<GetWithdrawalHistoryUseCase>('IGetWithdrawalHistoryUseCase', GetWithdrawalHistoryUseCase);
+container.registerSingleton<GetWithdrawalDetailsUseCase>('IGetWithdrawalDetailsUseCase', GetWithdrawalDetailsUseCase);
+container.registerSingleton<GetUserNotificationsUseCase>('IGetUserNotificationsUseCase', GetUserNotificationsUseCase);
 
 // Wallet UseCases
 container.registerSingleton<GetWalletUseCase>('IGetWalletUseCase', GetWalletUseCase);
@@ -104,9 +115,12 @@ container.registerSingleton<GetInfluencerStatsUseCase>('IGetInfluencerStatsUseCa
 container.registerSingleton<UpdateInfluencerUseCase>('IUpdateInfluencerUseCase', UpdateInfluencerUseCase);
 container.registerSingleton<GetWithdrawalRequestsUseCase>('IGetWithdrawalRequestsUseCase', GetWithdrawalRequestsUseCase);
 container.registerSingleton<ProcessWithdrawalUseCase>('IProcessWithdrawalUseCase', ProcessWithdrawalUseCase);
+container.registerSingleton<ApproveWithdrawalUseCase>('IApproveWithdrawalUseCase', ApproveWithdrawalUseCase);
+container.registerSingleton<RejectWithdrawalUseCase>('IRejectWithdrawalUseCase', RejectWithdrawalUseCase);
+container.registerSingleton<MarkWithdrawalPaidUseCase>('IMarkWithdrawalPaidUseCase', MarkWithdrawalPaidUseCase);
 container.registerSingleton<GetInfluencerRequestsUseCase>('IGetInfluencerRequestsUseCase', GetInfluencerRequestsUseCase);
 container.registerSingleton<ApproveInfluencerRequestUseCase>('IApproveInfluencerRequestUseCase', ApproveInfluencerRequestUseCase);
-container.registerSingleton<RejectInfluencerRequestUseCase>('IRejectInfluencerRequestUseCase', RejectInfluencerRequestUseCase);
+container.registerSingleton<RejectInfluencerApplicationUseCase>('IRejectInfluencerRequestUseCase', RejectInfluencerApplicationUseCase);
 container.registerSingleton<GetInfluencerProductsUseCase>('IGetInfluencerProductsUseCase', GetInfluencerProductsUseCase);
 container.registerSingleton<UpdateProductInfluencerDiscountUseCase>('IUpdateProductInfluencerDiscountUseCase', UpdateProductInfluencerDiscountUseCase);
 
@@ -207,3 +221,24 @@ container.registerSingleton<AuthService>('IAuthService', AuthService);
 import { GetInfluencerSettingsUseCase, UpdateInfluencerSettingsUseCase } from '../../application/usecases/admin/InfluencerSettingUseCases';
 container.registerSingleton<GetInfluencerSettingsUseCase>('IGetInfluencerSettingsUseCase', GetInfluencerSettingsUseCase);
 container.registerSingleton<UpdateInfluencerSettingsUseCase>('IUpdateInfluencerSettingsUseCase', UpdateInfluencerSettingsUseCase);
+
+// Staff UseCases
+import {
+    CreateStaffUseCase,
+    GetStaffListUseCase,
+    GetStaffDetailsUseCase,
+    UpdateStaffUseCase,
+    ActivateStaffUseCase,
+    DeactivateStaffUseCase,
+    BlockStaffUseCase,
+    UnblockStaffUseCase
+} from '../../application/usecases/admin/AdminStaffUseCases';
+
+container.registerSingleton(CreateStaffUseCase);
+container.registerSingleton(GetStaffListUseCase);
+container.registerSingleton(GetStaffDetailsUseCase);
+container.registerSingleton(UpdateStaffUseCase);
+container.registerSingleton(ActivateStaffUseCase);
+container.registerSingleton(DeactivateStaffUseCase);
+container.registerSingleton(BlockStaffUseCase);
+container.registerSingleton(UnblockStaffUseCase);

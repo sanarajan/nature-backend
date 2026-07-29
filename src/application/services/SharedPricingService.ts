@@ -10,6 +10,7 @@ import { ComboOfferModel } from '../../infrastructure/database/models/ComboOffer
 import { ShippingChargeModel } from '../../infrastructure/database/models/ShippingChargeModel';
 import { AddressModel } from '../../infrastructure/database/models/AddressModel';
 import { LoyaltySettingModel } from '../../infrastructure/database/models/LoyaltySettingModel';
+import { OrderModel } from '../../infrastructure/database/models/OrderModel';
 import { UserLoyaltyUseCases } from '../usecases/user/UserLoyaltyUseCases';
 
 const roundTo2 = (num: number) => Math.round(num * 100) / 100;
@@ -379,7 +380,30 @@ export class SharedPricingService {
         let influencerDiscountAmount = 0;
         const influencerDiscountPercent = influencerSettings?.influencerDiscountPercent || 20;
 
-        if (appliedInfluencer && isInfluencerEnabled) {
+        let isInfluencerDiscountEligible = true;
+        let influencerDaysRemaining = 0;
+
+        if (appliedInfluencer && userId && isInfluencerEnabled) {
+            const lastDiscountedOrder = await OrderModel.findOne({
+                userId: userId,
+                influencerDiscountAmount: { $gt: 0 },
+                paymentStatus: { $ne: 'Failed' },
+                globalOrderStatus: { $nin: ['CANCELLED', 'Cancelled', 'Expired'] }
+            }).sort({ createdAt: -1 });
+
+            if (lastDiscountedOrder) {
+                const lastOrderTime = new Date(lastDiscountedOrder.createdAt).getTime();
+                const diffMs = now.getTime() - lastOrderTime;
+                const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+                if (diffDays < 90) {
+                    isInfluencerDiscountEligible = false;
+                    influencerDaysRemaining = Math.max(1, Math.ceil(90 - diffDays));
+                }
+            }
+        }
+
+        if (appliedInfluencer && isInfluencerEnabled && isInfluencerDiscountEligible) {
             finalProducts.forEach(item => {
                 const prodInfluencerDiscount = Number(item.product?.influencerDiscount) || 0;
                 if (prodInfluencerDiscount > 0 && item.finalUnitPrice > 0) {
@@ -473,8 +497,14 @@ export class SharedPricingService {
                 influencerCode: appliedInfluencer ? activeInfluencerCode : null,
                 influencerApplied: appliedInfluencer ? {
                     _id: appliedInfluencer._id,
-                    influencerCode: activeInfluencerCode
+                    influencerCode: activeInfluencerCode,
+                    isEligible: isInfluencerDiscountEligible,
+                    daysRemaining: influencerDaysRemaining
                 } : null,
+                influencerEligibility: {
+                    isEligible: isInfluencerDiscountEligible,
+                    daysRemaining: influencerDaysRemaining
+                },
                 discountType: influencerDiscountAmount > 0 ? "Influencer" : (hasComboOffer ? "Combo" : (hasProductOfferFlag ? "Product" : (appliedCouponId ? "Coupon" : (appliedReferralCode ? "Referral" : "")))),
                 totalDiscount: finalDiscountAmount,
                 naturePointsDiscount,
@@ -497,8 +527,14 @@ export class SharedPricingService {
             influencerDiscount: influencerDiscountAmount,
             influencerApplied: appliedInfluencer ? {
                 _id: appliedInfluencer._id,
-                influencerCode: activeInfluencerCode
+                influencerCode: activeInfluencerCode,
+                isEligible: isInfluencerDiscountEligible,
+                daysRemaining: influencerDaysRemaining
             } : null,
+            influencerEligibility: {
+                isEligible: isInfluencerDiscountEligible,
+                daysRemaining: influencerDaysRemaining
+            },
             influencerCode: appliedInfluencer ? activeInfluencerCode : null,
             naturePointsDiscount,
             naturePointsUsed,

@@ -61,8 +61,18 @@ export class AdminInfluencerController {
 
     async getWithdrawalRequests(req: Request, res: Response): Promise<void> {
         try {
-            const requests = await this.getWithdrawalRequestsUseCase.execute();
-            res.status(STATUS_CODES.OK).json({ success: true, data: requests });
+            const search = req.query.search as string;
+            const status = req.query.status as string;
+            const page = Number(req.query.page) || 1;
+            const limit = Number(req.query.limit) || 10;
+            const result = await this.getWithdrawalRequestsUseCase.execute({ search, status, page, limit });
+            
+            // Handle both legacy array return format and paginated format for full backward compatibility
+            if (Array.isArray(result)) {
+                res.status(STATUS_CODES.OK).json({ success: true, data: result });
+            } else {
+                res.status(STATUS_CODES.OK).json({ success: true, data: result.requests, pagination: result.pagination });
+            }
         } catch (error: any) {
             res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }
@@ -71,9 +81,42 @@ export class AdminInfluencerController {
     async processWithdrawal(req: Request, res: Response): Promise<void> {
         try {
             const id = req.params.id as string;
-            const { status, remarks } = req.body;
-            const request = await this.processWithdrawalUseCase.execute(id, status, remarks);
-            res.status(STATUS_CODES.OK).json({ success: true, data: request });
+            const { status, remarks, reason, transactionReference } = req.body;
+            const request = await this.processWithdrawalUseCase.execute(id, status, remarks, reason, transactionReference);
+            res.status(STATUS_CODES.OK).json({ success: true, message: `Withdrawal request status updated to ${status}`, data: request });
+        } catch (error: any) {
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
+        }
+    }
+
+    async approveWithdrawal(req: Request, res: Response): Promise<void> {
+        try {
+            const id = req.params.id as string;
+            const { remarks } = req.body;
+            const request = await this.processWithdrawalUseCase.execute(id, 'Approved', remarks);
+            res.status(STATUS_CODES.OK).json({ success: true, message: 'Withdrawal request approved successfully', data: request });
+        } catch (error: any) {
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
+        }
+    }
+
+    async rejectWithdrawal(req: Request, res: Response): Promise<void> {
+        try {
+            const id = req.params.id as string;
+            const { reason } = req.body;
+            const request = await this.processWithdrawalUseCase.execute(id, 'Rejected', undefined, reason);
+            res.status(STATUS_CODES.OK).json({ success: true, message: 'Withdrawal request rejected successfully', data: request });
+        } catch (error: any) {
+            res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
+        }
+    }
+
+    async markWithdrawalPaid(req: Request, res: Response): Promise<void> {
+        try {
+            const id = req.params.id as string;
+            const { transactionReference, remarks } = req.body;
+            const request = await this.processWithdrawalUseCase.execute(id, 'Paid', remarks, undefined, transactionReference);
+            res.status(STATUS_CODES.OK).json({ success: true, message: 'Withdrawal marked as Paid successfully', data: request });
         } catch (error: any) {
             res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });
         }

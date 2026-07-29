@@ -81,9 +81,16 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
             userDoc.influencerReferralVisits || 0,
             userDoc.commissionPercentage,
             userDoc.influencerWalletBalance,
+            userDoc.influencerWithdrawalHold || userDoc.withdrawalHold || 0,
+            userDoc.withdrawalHold || userDoc.influencerWithdrawalHold || 0,
             userDoc.influencerPendingBalance,
             userDoc.influencerTotalEarned,
-            userDoc.influencerTotalWithdrawn
+            userDoc.influencerTotalWithdrawn,
+            userDoc.accountHolderName,
+            userDoc.bankName,
+            userDoc.accountNumber,
+            userDoc.ifscCode,
+            userDoc.upiId
         );
     }
 
@@ -108,9 +115,16 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
             influencerStatus: user.influencerStatus,
             commissionPercentage: user.commissionPercentage,
             influencerWalletBalance: user.influencerWalletBalance,
+            influencerWithdrawalHold: user.influencerWithdrawalHold || user.withdrawalHold,
+            withdrawalHold: user.withdrawalHold || user.influencerWithdrawalHold,
             influencerPendingBalance: user.influencerPendingBalance,
             influencerTotalEarned: user.influencerTotalEarned,
-            influencerTotalWithdrawn: user.influencerTotalWithdrawn
+            influencerTotalWithdrawn: user.influencerTotalWithdrawn,
+            accountHolderName: user.accountHolderName,
+            bankName: user.bankName,
+            accountNumber: user.accountNumber,
+            ifscCode: user.ifscCode,
+            upiId: user.upiId
         };
     }
 

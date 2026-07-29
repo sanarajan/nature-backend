@@ -10,6 +10,7 @@ export class InfluencerSettingRepository implements IInfluencerSettingRepository
                 influencerCommissionPercent: 20,
                 referralCookieDays: 30,
                 influencerEnabled: true,
+                minWithdrawalAmount: 500,
                 isActive: true
             });
         }

@@ -49,7 +49,8 @@ export class AuthController {
         try {
             const { user, accessToken, refreshToken } = await this.loginUseCase.execute(email, password);
 
-            const prefix = (user.role.toUpperCase() === 'ADMIN') ? 'admin_' : 'user_';
+            const roleUpper = user.role ? user.role.toUpperCase() : '';
+            const prefix = (roleUpper === 'ADMIN' || roleUpper === 'STAFF') ? 'admin_' : 'user_';
 
             res.cookie(`${prefix}refreshToken`, refreshToken, {
                 httpOnly: true,

@@ -12,6 +12,7 @@ import { seedUnits } from './infrastructure/database/seed/seedUnits';
 import { seedReferralSettings } from './infrastructure/database/seed/seedReferralSettings';
 import { seedLocations } from './utils/seedLocations';
 import adminAuthRoutes from './interface/routes/admin/adminAuthRoutes';
+import adminStaffRoutes from './interface/routes/admin/adminStaffRoutes';
 import adminCategoryRoutes from './interface/routes/admin/adminCategoryRoutes';
 import adminProductRoutes from './interface/routes/admin/adminProductRoutes';
 import adminSubcategoryRoutes from './interface/routes/admin/adminSubcategoryRoutes';
@@ -106,6 +107,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/admin/auth', adminAuthRoutes);
+app.use('/api/admin/staff', adminStaffRoutes);
 app.use('/api/admin/categories', adminCategoryRoutes);
 app.use('/api/admin/subcategories', adminSubcategoryRoutes);
 app.use('/api/admin/products', adminProductRoutes);

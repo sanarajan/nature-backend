@@ -52,6 +52,14 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
         return result.modifiedCount > 0;
     }
 
+    async findByResetTokenHash(tokenHash: string): Promise<User | null> {
+        const userDoc = await UserModel.findOne({
+            passwordResetTokenHash: tokenHash,
+            passwordResetTokenExpiresAt: { $gt: new Date() }
+        }).exec();
+        return userDoc ? this.mapToEntity(userDoc) : null;
+    }
+
     protected mapToEntity(userDoc: IUserDocument): User {
         return new User(
             userDoc._id.toString(),
@@ -90,7 +98,11 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
             userDoc.bankName,
             userDoc.accountNumber,
             userDoc.ifscCode,
-            userDoc.upiId
+            userDoc.upiId,
+            userDoc.passwordResetTokenHash,
+            userDoc.passwordResetTokenExpiresAt,
+            userDoc.googleId,
+            userDoc.authProvider
         );
     }
 
@@ -104,6 +116,8 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
             role: user.role,
             verified: user.verified,
             imageUrl: user.imageUrl,
+            googleId: user.googleId,
+            authProvider: user.authProvider,
             referralId: user.referralId,
             referredBy: user.referredBy,
             isInfluencer: user.isInfluencer,
@@ -124,7 +138,9 @@ export class UserRepository extends BaseRepository<User, IUserDocument> implemen
             bankName: user.bankName,
             accountNumber: user.accountNumber,
             ifscCode: user.ifscCode,
-            upiId: user.upiId
+            upiId: user.upiId,
+            passwordResetTokenHash: user.passwordResetTokenHash,
+            passwordResetTokenExpiresAt: user.passwordResetTokenExpiresAt
         };
     }
 

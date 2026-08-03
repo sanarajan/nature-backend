@@ -35,6 +35,8 @@ import userCouponRoutes from './interface/routes/user/couponRoutes';
 import userLoyaltyRoutes from './interface/routes/user/userLoyaltyRoutes';
 import adminInfluencerRoutes from './interface/routes/admin/adminInfluencerRoutes';
 import userInfluencerRoutes from './interface/routes/user/userInfluencerRoutes';
+import adminSpinWheelRoutes from './interface/routes/admin/adminSpinWheelRoutes';
+import userSpinWheelRoutes from './interface/routes/user/userSpinWheelRoutes';
 import { errorHandler } from './middleware/errorMiddleware';
 import { startCommissionCron } from './infrastructure/jobs/CommissionCron';
 import { startInfluencerCommissionCron } from './infrastructure/cron/InfluencerCommissionCron';
@@ -62,7 +64,9 @@ import './infrastructure/database/models/ShippingChargeModel';
 import './infrastructure/database/models/ShippingAgencyModel';
 import './infrastructure/database/models/InfluencerSettingModel';
 import './infrastructure/database/models/InfluencerReferralVisitModel';
-
+import './infrastructure/database/models/SpinWheelSettingModel';
+import './infrastructure/database/models/SpinWheelSegmentModel';
+import './infrastructure/database/models/SpinHistoryModel';
 
 const app = express();
 
@@ -94,7 +98,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// Note: app.use(cors()) already handles OPTIONS preflight automatically.
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
@@ -120,6 +123,7 @@ app.use('/api/admin/combo-listing', adminComboOfferRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/influencers', adminInfluencerRoutes);
 app.use('/api/admin/loyalty-settings', adminLoyaltySettingRoutes);
+app.use('/api/admin/marketing/spin-wheel', adminSpinWheelRoutes);
 app.use('/api/admin', adminShippingChargeRoutes);
 app.use('/api/user/auth', userAuthRoutes);
 app.use('/api/user/categories', userCategoryRoutes);
@@ -131,6 +135,7 @@ app.use('/api/user/wallet', userWalletRoutes);
 app.use('/api/user/coupon', userCouponRoutes);
 app.use('/api/user/loyalty', userLoyaltyRoutes);
 app.use('/api/user/influencer', userInfluencerRoutes);
+app.use('/api/user/spin-wheel', userSpinWheelRoutes);
 
 // Error Handler
 app.use(errorHandler);

@@ -10,5 +10,6 @@ export interface IUserRepository {
     findAllInfluencerRequests(): Promise<any[]>;
     findByIdAndUpdate(id: string, data: any): Promise<any | null>;
     trackReferralVisit(code: string): Promise<boolean>;
+    findByResetTokenHash(tokenHash: string): Promise<User | null>;
 }
 

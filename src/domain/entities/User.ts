@@ -39,7 +39,11 @@ export class User {
         public readonly bankName?: string,
         public readonly accountNumber?: string,
         public readonly ifscCode?: string,
-        public readonly upiId?: string
+        public readonly upiId?: string,
+        public readonly passwordResetTokenHash?: string | null,
+        public readonly passwordResetTokenExpiresAt?: Date | null,
+        public readonly googleId?: string,
+        public readonly authProvider?: string
     ) { }
 }
 

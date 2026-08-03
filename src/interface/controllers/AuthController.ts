@@ -3,6 +3,8 @@ import { inject, injectable } from 'tsyringe';
 import { ILoginUseCase } from '../../application/interfaces/auth/ILoginUseCase';
 import { IRegisterUseCase } from '../../application/interfaces/auth/IRegisterUseCase';
 import { IVerifyEmailUseCase } from '../../application/interfaces/auth/IVerifyEmailUseCase';
+import { IForgotPasswordUseCase } from '../../application/interfaces/auth/IForgotPasswordUseCase';
+import { IResetPasswordUseCase } from '../../application/interfaces/auth/IResetPasswordUseCase';
 import { IAuthService } from '../../application/interfaces/auth/IAuthService';
 import { IUserRepository } from '../../domain/repositories/IUserRepository';
 import { STATUS_CODES } from '../../shared/constants/statusCodes';
@@ -15,6 +17,8 @@ export class AuthController {
         @inject('ILoginUseCase') private loginUseCase: ILoginUseCase,
         @inject('IRegisterUseCase') private registerUseCase: IRegisterUseCase,
         @inject('IVerifyEmailUseCase') private verifyEmailUseCase: IVerifyEmailUseCase,
+        @inject('IForgotPasswordUseCase') private forgotPasswordUseCase: IForgotPasswordUseCase,
+        @inject('IResetPasswordUseCase') private resetPasswordUseCase: IResetPasswordUseCase,
         @inject('IAuthService') private authService: IAuthService,
         @inject('IUserRepository') private userRepository: IUserRepository
     ) { }
@@ -98,6 +102,40 @@ export class AuthController {
 
         try {
             const result = await this.verifyEmailUseCase.execute(email as string, token as string);
+            res.status(STATUS_CODES.OK).json({
+                success: true,
+                message: result.message,
+            });
+        } catch (error: any) {
+            res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: error.message,
+            });
+        }
+    }
+
+    async forgotPassword(req: Request, res: Response): Promise<void> {
+        const { email } = req.body;
+
+        try {
+            const result = await this.forgotPasswordUseCase.execute(email);
+            res.status(STATUS_CODES.OK).json({
+                success: true,
+                message: result.message,
+            });
+        } catch (error: any) {
+            res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: error.message,
+            });
+        }
+    }
+
+    async resetPassword(req: Request, res: Response): Promise<void> {
+        const { token, newPassword } = req.body;
+
+        try {
+            const result = await this.resetPasswordUseCase.execute(token, newPassword);
             res.status(STATUS_CODES.OK).json({
                 success: true,
                 message: result.message,

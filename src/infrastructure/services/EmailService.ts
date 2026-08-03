@@ -269,5 +269,47 @@ export class EmailService implements IEmailService {
             throw new Error('Failed to send staff registration credentials email');
         }
     }
+
+    async sendForgotPasswordEmail(email: string, token: string): Promise<void> {
+        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const resetLink = `${clientUrl}/reset-password?token=${encodeURIComponent(token)}`;
+
+        const mailOptions = {
+            from: process.env.EMAIL_FROM || 'noreply@nature.com',
+            to: email,
+            subject: 'Password Reset Request - Naturalayam',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2 style="color: #4CAF50;">Password Reset Request</h2>
+                    <p>We received a request to reset your password for your Naturalayam account.</p>
+                    <p>Click the button below to set a new password:</p>
+                    <div style="margin: 25px 0;">
+                        <a href="${resetLink}" style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+                    </div>
+                    <p>Or copy and paste this link in your browser:</p>
+                    <p><a href="${resetLink}">${resetLink}</a></p>
+                    <p>This link will expire in 30 minutes.</p>
+                    <p>If you did not request a password reset, please ignore this email.</p>
+                    <p>Best regards,<br/>The Naturalayam Team</p>
+                </div>
+            `,
+        };
+
+        try {
+            if (process.env.EMAIL_USER) {
+                await this.transporter.sendMail(mailOptions);
+                console.log(`Password reset email sent to ${email}`);
+            } else {
+                console.log(`[DEV MODE] Password Reset Link for ${email}:\n => ${resetLink}`);
+            }
+        } catch (error) {
+            console.error('Error sending password reset email:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`[DEV MODE] Password Reset Link for ${email}:\n => ${resetLink}`);
+                return;
+            }
+            throw new Error('Failed to send password reset email');
+        }
+    }
 }
 

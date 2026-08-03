@@ -62,11 +62,20 @@ import {
 import { GetCategoriesWithCountsUseCase, GetCategoryHierarchyUseCase } from '../../application/usecases/catalog/CategoryUseCases';
 import { AddCategoryUseCase, GetAllCategoriesUseCase as AdminGetAllCategoriesUseCase, UpdateCategoryUseCase, DeleteCategoryUseCase } from '../../application/usecases/admin/AdminCategoryUseCases';
 
+import { ForgotPasswordUseCase } from '../../application/usecases/auth/ForgotPasswordUseCase';
+import { ResetPasswordUseCase } from '../../application/usecases/auth/ResetPasswordUseCase';
+import { GoogleAuthService } from '../../application/services/GoogleAuthService';
+import { GoogleAuthUseCase } from '../../application/usecases/auth/GoogleAuthUseCase';
+
 // Auth UseCases
 container.registerSingleton<SharedPricingService>('ISharedPricingService', SharedPricingService);
 container.registerSingleton<LoginUseCase>('ILoginUseCase', LoginUseCase);
 container.registerSingleton<RegisterUseCase>('IRegisterUseCase', RegisterUseCase);
 container.registerSingleton<VerifyEmailUseCase>('IVerifyEmailUseCase', VerifyEmailUseCase);
+container.registerSingleton<ForgotPasswordUseCase>('IForgotPasswordUseCase', ForgotPasswordUseCase);
+container.registerSingleton<ResetPasswordUseCase>('IResetPasswordUseCase', ResetPasswordUseCase);
+container.registerSingleton<GoogleAuthService>('IGoogleAuthService', GoogleAuthService);
+container.registerSingleton<GoogleAuthUseCase>('IGoogleAuthUseCase', GoogleAuthUseCase);
 
 // User UseCases
 container.registerSingleton<GetMeUseCase>('IGetMeUseCase', GetMeUseCase);
@@ -242,3 +251,10 @@ container.registerSingleton(ActivateStaffUseCase);
 container.registerSingleton(DeactivateStaffUseCase);
 container.registerSingleton(BlockStaffUseCase);
 container.registerSingleton(UnblockStaffUseCase);
+
+// Spin Wheel UseCases
+import { AdminSpinWheelUseCases } from '../../application/usecases/admin/AdminSpinWheelUseCases';
+import { UserSpinWheelUseCases } from '../../application/usecases/user/UserSpinWheelUseCases';
+container.registerSingleton(AdminSpinWheelUseCases);
+container.registerSingleton(UserSpinWheelUseCases);
+

@@ -9,6 +9,7 @@ export interface IUserDocument extends Document {
     password?: string;
     phoneNumber?: string;
     googleId?: string;
+    authProvider?: string;
     userType: number; // 1 for admin, 2 for regular users
     isActive: boolean;
     verified?: boolean;
@@ -48,6 +49,10 @@ export interface IUserDocument extends Document {
     };
     influencerRejectionReason?: string;
     
+    // Password Reset Fields
+    passwordResetTokenHash?: string | null;
+    passwordResetTokenExpiresAt?: Date | null;
+    
     createdAt: Date;
     updatedAt: Date;
 }
@@ -59,6 +64,7 @@ const userSchema = new Schema<IUserDocument>({
     password: { type: String, required: false },
     phoneNumber: { type: String, required: false, unique: true, sparse: true, default: null },
     googleId: { type: String, unique: true, sparse: true },
+    authProvider: { type: String, default: 'email' },
     userType: { type: Number, default: 2 }, // 1 for admin, 2 for regular users
     isActive: { type: Boolean, default: true },
     verified: { type: Boolean, default: false },
@@ -96,7 +102,11 @@ const userSchema = new Schema<IUserDocument>({
         instagram: { type: String },
         youtube: { type: String }
     },
-    influencerRejectionReason: { type: String }
+    influencerRejectionReason: { type: String },
+
+    // Password Reset Fields
+    passwordResetTokenHash: { type: String, default: null },
+    passwordResetTokenExpiresAt: { type: Date, default: null }
 }, { timestamps: true });
 
 // Hash password before saving

@@ -1,16 +1,21 @@
 import { Router } from 'express';
 import { container } from '../../../infrastructure/config/container';
 import { AuthController } from '../../controllers/AuthController';
+import { GoogleAuthController } from '../../controllers/GoogleAuthController';
 import { UserController } from '../../controllers/user/UserController';
 import { userAuthProtect } from '../../../middleware/userAuthMiddleware';
 
 const router = Router();
 const authController = container.resolve(AuthController);
+const googleAuthController = container.resolve(GoogleAuthController);
 const userController = container.resolve(UserController);
 
 router.post('/register', (req, res) => authController.register(req, res));
 router.post('/login', (req, res) => authController.login(req, res));
+router.post('/google', (req, res) => googleAuthController.googleLogin(req, res));
 router.post('/verify-email', (req, res) => authController.verifyEmail(req, res));
+router.post('/forgot-password', (req, res) => authController.forgotPassword(req, res));
+router.post('/reset-password', (req, res) => authController.resetPassword(req, res));
 router.post('/logout', (req, res) => authController.logout(req, res));
 router.post('/refresh', (req, res) => authController.refresh(req, res));
 

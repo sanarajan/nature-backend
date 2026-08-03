@@ -403,7 +403,8 @@ export class SharedPricingService {
             }
         }
 
-        if (appliedInfluencer && isInfluencerEnabled && isInfluencerDiscountEligible) {
+        if (appliedInfluencer && isInfluencerEnabled && isInfluencerDiscountEligible && !appliedCouponId && !appliedReferralCode) {
+
             finalProducts.forEach(item => {
                 const prodInfluencerDiscount = Number(item.product?.influencerDiscount) || 0;
                 if (prodInfluencerDiscount > 0 && item.finalUnitPrice > 0) {

@@ -71,6 +71,11 @@ import { RazorpayService } from '../services/RazorpayService';
     container.registerSingleton<IInfluencerSettingRepository>('IInfluencerSettingRepository', InfluencerSettingRepository);
     container.registerSingleton<IInfluencerReferralVisitRepository>('IInfluencerReferralVisitRepository', InfluencerReferralVisitRepository);
 
+import { ISpinWheelRepository } from '../../domain/repositories/ISpinWheelRepository';
+import { SpinWheelRepository } from '../database/repositories/SpinWheelRepository';
+
+    container.registerSingleton<ISpinWheelRepository>('ISpinWheelRepository', SpinWheelRepository);
+
     // Services
     container.registerSingleton<EmailService>('IEmailService', EmailService);
     container.registerSingleton<JwtService>('IJwtService', JwtService);

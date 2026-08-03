@@ -42,3 +42,30 @@ export const userAuthProtect = async (
         res.status(401).json({ success: false, message: 'Access token invalid or expired' });
     }
 };
+
+export const optionalUserAuthProtect = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    let token;
+    if (req.cookies && req.cookies.user_jwt) {
+        token = req.cookies.user_jwt;
+    } else {
+        const authHeader = req.headers['authorization'];
+        token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    }
+
+    if (token) {
+        try {
+            const authService = container.resolve<IAuthService>('IAuthService');
+            const payload = await authService.verifyAccessToken(token);
+            if (payload && payload.role && payload.role.toUpperCase() === 'USER') {
+                (req as any).user = payload;
+            }
+        } catch (err) {
+            // Ignore error for optional auth
+        }
+    }
+    next();
+};

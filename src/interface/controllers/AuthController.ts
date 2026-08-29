@@ -54,6 +54,24 @@ export class AuthController {
             const { user, accessToken, refreshToken } = await this.loginUseCase.execute(email, password);
 
             const roleUpper = user.role ? user.role.toUpperCase() : '';
+            
+            const isAdminRoute = req.baseUrl.includes('/admin');
+            if (!isAdminRoute && (roleUpper === 'ADMIN' || roleUpper === 'STAFF')) {
+                res.status(STATUS_CODES.UNAUTHORIZED).json({
+                    success: false,
+                    message: AUTH_MESSAGES.INVALID_CREDENTIALS,
+                });
+                return;
+            }
+            
+            if (isAdminRoute && (roleUpper !== 'ADMIN' && roleUpper !== 'STAFF')) {
+                res.status(STATUS_CODES.UNAUTHORIZED).json({
+                    success: false,
+                    message: AUTH_MESSAGES.INVALID_CREDENTIALS,
+                });
+                return;
+            }
+
             const prefix = (roleUpper === 'ADMIN' || roleUpper === 'STAFF') ? 'admin_' : 'user_';
 
             res.cookie(`${prefix}refreshToken`, refreshToken, {

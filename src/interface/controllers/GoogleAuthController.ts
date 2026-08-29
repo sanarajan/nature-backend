@@ -25,6 +25,15 @@ export class GoogleAuthController {
         try {
             const { user, accessToken, refreshToken } = await this.googleAuthUseCase.execute(credential);
 
+            const roleUpper = user.role ? user.role.toUpperCase() : '';
+            if (roleUpper === 'ADMIN' || roleUpper === 'STAFF') {
+                res.status(STATUS_CODES.UNAUTHORIZED).json({
+                    success: false,
+                    message: AUTH_MESSAGES.INVALID_CREDENTIALS || 'Google authentication failed',
+                });
+                return;
+            }
+
             const prefix = 'user_';
 
             res.cookie(`${prefix}refreshToken`, refreshToken, {

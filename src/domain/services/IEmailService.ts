@@ -6,5 +6,6 @@ export interface IEmailService {
     sendInfluencerRejectionEmail(email: string, userName: string, reason?: string): Promise<void>;
     sendStaffCredentialsEmail(email: string, name: string, password: string): Promise<void>;
     sendForgotPasswordEmail(email: string, token: string): Promise<void>;
+    sendContactEmail(name: string, email: string, preference: string, message: string): Promise<void>;
 }
 

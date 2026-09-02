@@ -12,7 +12,8 @@ export class CouponController {
 
     async getActiveCoupons(req: Request, res: Response): Promise<void> {
         try {
-            const coupons = await this.getActiveCouponsUseCase.execute();
+            const userId = (req as any).user?.id || (req as any).user?._id;
+            const coupons = await this.getActiveCouponsUseCase.execute(userId);
 
             res.status(STATUS_CODES.OK).json({
                 success: true,
@@ -31,7 +32,8 @@ export class CouponController {
             const { code, amount } = req.body;
             const purchaseAmount = Number(amount);
 
-            const coupon = await this.validateCouponUseCase.execute(code, purchaseAmount);
+            const userId = (req as any).user?.id || (req as any).user?._id;
+            const coupon = await this.validateCouponUseCase.execute(code, purchaseAmount, userId);
 
             res.status(STATUS_CODES.OK).json({
                 success: true,

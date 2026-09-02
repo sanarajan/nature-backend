@@ -11,6 +11,7 @@ import { ShippingChargeModel } from '../../infrastructure/database/models/Shippi
 import { AddressModel } from '../../infrastructure/database/models/AddressModel';
 import { LoyaltySettingModel } from '../../infrastructure/database/models/LoyaltySettingModel';
 import { OrderModel } from '../../infrastructure/database/models/OrderModel';
+import { SpinHistoryModel } from '../../infrastructure/database/models/SpinHistoryModel';
 import { UserLoyaltyUseCases } from '../usecases/user/UserLoyaltyUseCases';
 
 const roundTo2 = (num: number) => Math.round(num * 100) / 100;
@@ -335,12 +336,56 @@ export class SharedPricingService {
                     throw new AppError(`Invalid referral code`, STATUS_CODES.BAD_REQUEST);
                 }
             } else if (couponCode && (!activeInfluencerCode || couponCode.toUpperCase() !== activeInfluencerCode.toUpperCase())) {
-                const coupon = await CouponModel.findOne({
-                    couponName: { $regex: new RegExp(`^${couponCode}$`, 'i') },
-                    status: true,
-                    startDate: { $lte: now },
-                    endDate: { $gte: now }
-                });
+                let isWheelCoupon = false;
+                let userCouponId = null;
+
+                // FIRST: Check if this is a Spin Wheel reward
+                if (couponCode.toUpperCase().startsWith('SPIN')) {
+                    const anySpinHistory = await SpinHistoryModel.findOne({ 
+                        couponCode: { $regex: new RegExp(`^${couponCode}$`, 'i') } 
+                    });
+                    
+                    if (anySpinHistory) {
+                        isWheelCoupon = true;
+                        const userSpinHistory = await SpinHistoryModel.findOne({
+                            couponCode: { $regex: new RegExp(`^${couponCode}$`, 'i') },
+                            user: userId
+                        });
+                        
+                        if (!userSpinHistory) {
+                            throw new AppError(`Invalid or expired coupon "${couponCode}"`, STATUS_CODES.BAD_REQUEST);
+                        }
+                        userCouponId = userSpinHistory.couponId;
+                    }
+                }
+
+                let coupon = null;
+                if (isWheelCoupon && userCouponId) {
+                    const fetchedCoupon = await CouponModel.findById(userCouponId);
+                    if (fetchedCoupon && fetchedCoupon.status && new Date(fetchedCoupon.startDate) <= now && new Date(fetchedCoupon.endDate) >= now) {
+                        coupon = fetchedCoupon;
+                    }
+                } else {
+                    coupon = await CouponModel.findOne({
+                        couponName: { $regex: new RegExp(`^${couponCode}$`, 'i') },
+                        status: true,
+                        startDate: { $lte: now },
+                        endDate: { $gte: now }
+                    });
+                }
+
+                // Check if the customer has already successfully used this normal coupon
+                if (!isWheelCoupon && coupon && userId) {
+                    const previousUsage = await OrderModel.findOne({
+                        userId: userId,
+                        coupon: coupon._id,
+                        globalOrderStatus: { $nin: ['PENDING', 'Expired', 'Failed', 'CANCELLED', 'CANCELLATION_REQUEST', 'Cancelled'] }
+                    });
+
+                    if (previousUsage) {
+                        throw new AppError('Coupon already used', STATUS_CODES.BAD_REQUEST);
+                    }
+                }
 
                 if (coupon) {
                     if (totalMRP >= coupon.minPurchase) {
@@ -354,6 +399,18 @@ export class SharedPricingService {
                         throw new AppError(`Minimum purchase of ₹${coupon.minPurchase} required for coupon "${couponCode}"`, STATUS_CODES.BAD_REQUEST);
                     }
                 } else { 
+                    let existingCoupon = null;
+                    if (isWheelCoupon && userCouponId) {
+                        existingCoupon = await CouponModel.findById(userCouponId);
+                    } else {
+                        existingCoupon = await CouponModel.findOne({
+                            couponName: { $regex: new RegExp(`^${couponCode}$`, 'i') }
+                        });
+                    }
+
+                    if (existingCoupon && !existingCoupon.status) {
+                        throw new AppError('Coupon already used', STATUS_CODES.BAD_REQUEST);
+                    }
                     throw new AppError(`Invalid or expired coupon "${couponCode}"`, STATUS_CODES.BAD_REQUEST);
                 }
             }
@@ -404,19 +461,53 @@ export class SharedPricingService {
         }
 
         if (appliedInfluencer && isInfluencerEnabled && isInfluencerDiscountEligible && !appliedCouponId && !appliedReferralCode) {
-
+            
+            // First pass: Check if ANY product has an individual influencer discount
+            let hasProductSpecificDiscount = false;
             finalProducts.forEach(item => {
                 const prodInfluencerDiscount = Number(item.product?.influencerDiscount) || 0;
-                if (prodInfluencerDiscount > 0 && item.finalUnitPrice > 0) {
-                    const unitDisc = Math.min(item.finalUnitPrice, prodInfluencerDiscount);
-                    const itemDiscTotal = unitDisc * item.quantity;
-                    item.finalUnitPrice = Math.max(0, item.finalUnitPrice - unitDisc);
-                    item.influencerDiscountAmount = itemDiscTotal;
-                    influencerDiscountAmount += itemDiscTotal;
-                } else {
-                    item.influencerDiscountAmount = 0;
+                if (prodInfluencerDiscount > 0) {
+                    hasProductSpecificDiscount = true;
                 }
             });
+
+            if (hasProductSpecificDiscount) {
+                // PRODUCT-SPECIFIC MODE: Common discount = 0
+                finalProducts.forEach(item => {
+                    const prodInfluencerDiscount = Number(item.product?.influencerDiscount) || 0;
+                    const discountType = (item.product as any)?.influencerDiscountType?.toLowerCase() || 'fixed';
+                    
+                    if (prodInfluencerDiscount > 0 && item.finalUnitPrice > 0) {
+                        let unitDisc = 0;
+                        if (discountType === 'percentage' || discountType === 'percent') {
+                            unitDisc = (item.finalUnitPrice * prodInfluencerDiscount) / 100;
+                        } else {
+                            unitDisc = Math.min(item.finalUnitPrice, prodInfluencerDiscount);
+                        }
+                        
+                        const itemDiscTotal = unitDisc * item.quantity;
+                        item.finalUnitPrice = Math.max(0, item.finalUnitPrice - unitDisc);
+                        item.influencerDiscountAmount = itemDiscTotal;
+                        influencerDiscountAmount += itemDiscTotal;
+                    } else {
+                        item.influencerDiscountAmount = 0;
+                    }
+                });
+            } else {
+                // COMMON MODE: Apply global percentage to eligible total
+                finalProducts.forEach(item => {
+                    if (item.finalUnitPrice > 0) {
+                        const unitDisc = (item.finalUnitPrice * influencerDiscountPercent) / 100;
+                        const itemDiscTotal = unitDisc * item.quantity;
+                        item.finalUnitPrice = Math.max(0, item.finalUnitPrice - unitDisc);
+                        item.influencerDiscountAmount = itemDiscTotal;
+                        influencerDiscountAmount += itemDiscTotal;
+                    } else {
+                        item.influencerDiscountAmount = 0;
+                    }
+                });
+            }
+
             if (influencerDiscountAmount > 0) {
                 finalDiscountAmount += influencerDiscountAmount;
             }

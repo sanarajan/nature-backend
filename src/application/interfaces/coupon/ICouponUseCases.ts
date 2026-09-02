@@ -1,7 +1,7 @@
 export interface IGetActiveCouponsUseCase {
-    execute(): Promise<any[]>;
+    execute(userId?: string): Promise<any[]>;
 }
 
 export interface IValidateCouponUseCase {
-    execute(code: string, purchaseAmount: number): Promise<any>;
+    execute(code: string, purchaseAmount: number, userId: string): Promise<any>;
 }

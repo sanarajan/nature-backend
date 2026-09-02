@@ -3,17 +3,22 @@ import { createHash } from 'crypto';
 import { ITrackReferralVisitUseCase } from '../../interfaces/user/IInfluencerUseCases';
 import { IUserRepository } from '../../../domain/repositories/IUserRepository';
 import { IInfluencerReferralVisitRepository } from '../../../domain/repositories/IInfluencerReferralVisitRepository';
+import { IInfluencerSettingRepository } from '../../../domain/repositories/IInfluencerSettingRepository';
 
 @injectable()
 export class TrackReferralVisitUseCase implements ITrackReferralVisitUseCase {
     constructor(
         @inject('IUserRepository') private userRepository: IUserRepository,
         @inject('IInfluencerReferralVisitRepository')
-        private influencerReferralVisitRepository: IInfluencerReferralVisitRepository
+        private influencerReferralVisitRepository: IInfluencerReferralVisitRepository,
+        @inject('IInfluencerSettingRepository') private influencerSettingRepository: IInfluencerSettingRepository
     ) {}
 
     async execute(code: string, sessionId: string, userId?: string | null): Promise<boolean> {
         if (!code || !sessionId) return false;
+        
+        const settings = await this.influencerSettingRepository.getSettings();
+        if (settings && settings.influencerEnabled === false) return false;
 
         const cleanCode = code.trim().toUpperCase();
 

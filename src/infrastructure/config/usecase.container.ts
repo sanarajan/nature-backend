@@ -66,6 +66,7 @@ import { ForgotPasswordUseCase } from '../../application/usecases/auth/ForgotPas
 import { ResetPasswordUseCase } from '../../application/usecases/auth/ResetPasswordUseCase';
 import { GoogleAuthService } from '../../application/services/GoogleAuthService';
 import { GoogleAuthUseCase } from '../../application/usecases/auth/GoogleAuthUseCase';
+import { SubmitContactFormUseCase } from '../../application/usecases/user/SubmitContactFormUseCase';
 
 // Auth UseCases
 container.registerSingleton<SharedPricingService>('ISharedPricingService', SharedPricingService);
@@ -76,6 +77,9 @@ container.registerSingleton<ForgotPasswordUseCase>('IForgotPasswordUseCase', For
 container.registerSingleton<ResetPasswordUseCase>('IResetPasswordUseCase', ResetPasswordUseCase);
 container.registerSingleton<GoogleAuthService>('IGoogleAuthService', GoogleAuthService);
 container.registerSingleton<GoogleAuthUseCase>('IGoogleAuthUseCase', GoogleAuthUseCase);
+
+// Contact UseCases
+container.registerSingleton<SubmitContactFormUseCase>('ISubmitContactFormUseCase', SubmitContactFormUseCase);
 
 // User UseCases
 container.registerSingleton<GetMeUseCase>('IGetMeUseCase', GetMeUseCase);

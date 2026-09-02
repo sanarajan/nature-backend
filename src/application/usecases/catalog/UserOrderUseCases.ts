@@ -14,6 +14,7 @@ import { ReferralSettingModel } from '../../../infrastructure/database/models/Re
 import { InfluencerSettingModel } from '../../../infrastructure/database/models/InfluencerSettingModel';
 import { UserModel } from '../../../infrastructure/database/models/UserModel';
 import { CouponModel } from '../../../infrastructure/database/models/CouponModel';
+import { SpinHistoryModel } from '../../../infrastructure/database/models/SpinHistoryModel';
 import { OfferModel } from '../../../infrastructure/database/models/OfferModel';
 import { ComboOfferModel } from '../../../infrastructure/database/models/ComboOfferModel';
 import { ShippingChargeModel } from '../../../infrastructure/database/models/ShippingChargeModel';
@@ -357,6 +358,23 @@ export class PlaceOrderUseCase {
             newOrder.influencerCommissionStatus = influencerCommissionStatus;
         }
 
+        if (!isOnline && appliedCouponId && couponCode) {
+            const spinHistory = await SpinHistoryModel.findOne({ 
+                couponCode: { $regex: new RegExp(`^${couponCode}$`, 'i') }, 
+                user: userId 
+            });
+            if (spinHistory) {
+                const updatedCoupon = await CouponModel.findOneAndUpdate(
+                    { _id: appliedCouponId, status: true },
+                    { $set: { status: false } },
+                    { new: true }
+                );
+                if (!updatedCoupon) {
+                    throw new AppError('This spin wheel coupon has already been used.', STATUS_CODES.BAD_REQUEST);
+                }
+            }
+        }
+
         if (isOnline) {
             const razorpayOrder = await this.razorpayService.createOrder(totalAmount, newOrder.orderId);
             newOrder.razorpayOrderId = razorpayOrder.id;
@@ -365,6 +383,7 @@ export class PlaceOrderUseCase {
         await newOrder.save();
 
         if (!isOnline) {
+
             cart.products = [];
             await cart.save();
 
@@ -474,6 +493,37 @@ export class VerifyPaymentUseCase {
             await loyaltyUseCases.earnPoints(order.userId.toString(), eligibleAmount, order.orderId);
         } catch (err) {
             console.error('Failed to earn points during VerifyPayment:', err);
+        }
+
+        if (order.coupon && order.couponName) {
+            const spinHistory = await SpinHistoryModel.findOne({ 
+                couponCode: { $regex: new RegExp(`^${order.couponName}$`, 'i') }, 
+                user: order.userId 
+            });
+            if (spinHistory) {
+                const updatedCoupon = await CouponModel.findOneAndUpdate(
+                    { _id: order.coupon, status: true },
+                    { $set: { status: false } },
+                    { new: true }
+                );
+                // Even if not updated (already used concurrently), we proceed to not fail the already captured payment,
+                // or we could throw. But since payment is captured, we just log it or accept it's used.
+                // The atomic check prevents most cases. To strictly follow the prompt: "Only one successful redemption must be possible."
+                // Since Razorpay payment is captured, if we throw AppError, the order remains Pending but money is deducted.
+                // We will throw AppError to strictly enforce "Reject request. Do not allow discount." 
+                // But wait, the prompt says "Before applying wheel reward coupon, backend must verify...".
+                // In VerifyPaymentUseCase, if we throw, order fails. Let's throw.
+                if (!updatedCoupon) {
+                    order.paymentStatus = 'Failed';
+                    order.statusHistory.push({
+                        status: 'Payment Verified but Coupon already used',
+                        timestamp: new Date(),
+                        updatedBy: 'System'
+                    });
+                    await order.save();
+                    throw new AppError('This spin wheel coupon has already been used by another order.', STATUS_CODES.BAD_REQUEST);
+                }
+            }
         }
 
         const cart = await CartModel.findOne({ user: order.userId, isActive: true });

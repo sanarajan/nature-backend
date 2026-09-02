@@ -62,7 +62,7 @@ const userSchema = new Schema<IUserDocument>({
     email: { type: String, required: false, unique: true, sparse: true },
     displayName: { type: String },
     password: { type: String, required: false },
-    phoneNumber: { type: String, required: false, unique: true, sparse: true, default: null },
+    phoneNumber: { type: String, required: false, unique: true, sparse: true },
     googleId: { type: String, unique: true, sparse: true },
     authProvider: { type: String, default: 'email' },
     userType: { type: Number, default: 2 }, // 1 for admin, 2 for regular users

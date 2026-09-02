@@ -114,7 +114,10 @@ export class InfluencerController {
             const settings = await InfluencerSettingModel.findOne({ isActive: true });
             res.status(STATUS_CODES.OK).json({ 
                 success: true, 
-                data: { influencerDiscountPercent: settings?.influencerDiscountPercent || 20 } 
+                data: { 
+                    influencerDiscountPercent: settings?.influencerDiscountPercent || 20,
+                    influencerEnabled: settings?.influencerEnabled ?? true
+                } 
             });
         } catch (error: any) {
             res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message });

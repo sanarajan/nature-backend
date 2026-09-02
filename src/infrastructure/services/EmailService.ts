@@ -311,5 +311,57 @@ export class EmailService implements IEmailService {
             throw new Error('Failed to send password reset email');
         }
     }
+
+    async sendContactEmail(name: string, email: string, preference: string, message: string): Promise<void> {
+        const mailOptions = {
+            from: process.env.EMAIL_FROM || 'noreply@naturalayam.com',
+            to: 'info@naturalayam.com',
+            replyTo: email,
+            subject: 'New Contact Enquiry - Naturalayam',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+                    <h2 style="color: #4CAF50;">New enquiry received from Naturalayam website</h2>
+                    <table style="width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 15px;">
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background-color: #f9f9f9; width: 150px;">Name:</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${name}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background-color: #f9f9f9;">Email:</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${email}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background-color: #f9f9f9;">What You Prefer:</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${preference}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background-color: #f9f9f9;">Message:</td>
+                            <td style="padding: 10px; border: 1px solid #ddd; white-space: pre-wrap;">${message}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background-color: #f9f9f9;">Submitted At:</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${new Date().toLocaleString()}</td>
+                        </tr>
+                    </table>
+                </div>
+            `,
+        };
+
+        try {
+            if (process.env.EMAIL_USER) {
+                await this.transporter.sendMail(mailOptions);
+                console.log(`Contact email sent from ${email}`);
+            } else {
+                console.log(`[DEV MODE] Contact Email from ${email}:\n Name => ${name}\n Preference => ${preference}\n Message => ${message}`);
+            }
+        } catch (error) {
+            console.error('Error sending contact email:', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`[DEV MODE] Contact Email from ${email}:\n Name => ${name}\n Preference => ${preference}\n Message => ${message}`);
+                return;
+            }
+            throw new Error('Failed to send contact email');
+        }
+    }
 }
 

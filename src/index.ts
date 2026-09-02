@@ -37,6 +37,7 @@ import adminInfluencerRoutes from './interface/routes/admin/adminInfluencerRoute
 import userInfluencerRoutes from './interface/routes/user/userInfluencerRoutes';
 import adminSpinWheelRoutes from './interface/routes/admin/adminSpinWheelRoutes';
 import userSpinWheelRoutes from './interface/routes/user/userSpinWheelRoutes';
+import contactRoutes from './interface/routes/user/contactRoutes';
 import { errorHandler } from './middleware/errorMiddleware';
 import { startCommissionCron } from './infrastructure/jobs/CommissionCron';
 import { startInfluencerCommissionCron } from './infrastructure/cron/InfluencerCommissionCron';
@@ -136,6 +137,7 @@ app.use('/api/user/coupon', userCouponRoutes);
 app.use('/api/user/loyalty', userLoyaltyRoutes);
 app.use('/api/user/influencer', userInfluencerRoutes);
 app.use('/api/user/spin-wheel', userSpinWheelRoutes);
+app.use('/api/contact', contactRoutes);
 
 // Error Handler
 app.use(errorHandler);

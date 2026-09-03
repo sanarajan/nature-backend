@@ -262,3 +262,9 @@ import { UserSpinWheelUseCases } from '../../application/usecases/user/UserSpinW
 container.registerSingleton(AdminSpinWheelUseCases);
 container.registerSingleton(UserSpinWheelUseCases);
 
+// Certification UseCases
+import { AdminCertificationUseCases } from '../../application/usecases/admin/AdminCertificationUseCases';
+import { UserCertificationUseCases } from '../../application/usecases/user/UserCertificationUseCases';
+container.registerSingleton(AdminCertificationUseCases);
+container.registerSingleton(UserCertificationUseCases);
+

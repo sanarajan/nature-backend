@@ -76,6 +76,10 @@ import { SpinWheelRepository } from '../database/repositories/SpinWheelRepositor
 
     container.registerSingleton<ISpinWheelRepository>('ISpinWheelRepository', SpinWheelRepository);
 
+import { ICertificationRepository } from '../../domain/repositories/ICertificationRepository';
+import { CertificationRepository } from '../database/repositories/CertificationRepository';
+    container.registerSingleton<ICertificationRepository>('ICertificationRepository', CertificationRepository);
+
     // Services
     container.registerSingleton<EmailService>('IEmailService', EmailService);
     container.registerSingleton<JwtService>('IJwtService', JwtService);

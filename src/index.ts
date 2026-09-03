@@ -42,6 +42,8 @@ import { errorHandler } from './middleware/errorMiddleware';
 import { startCommissionCron } from './infrastructure/jobs/CommissionCron';
 import { startInfluencerCommissionCron } from './infrastructure/cron/InfluencerCommissionCron';
 import { startNaturePointsExpiryCron } from './infrastructure/cron/NaturePointsExpiryCron';
+import adminCertificationRoutes from './interface/routes/admin/adminCertificationRoutes';
+import userCertificationRoutes from './interface/routes/user/userCertificationRoutes';
 
 // Exported models to ensure registration
 import './infrastructure/database/models/CategoryModel';
@@ -68,6 +70,7 @@ import './infrastructure/database/models/InfluencerReferralVisitModel';
 import './infrastructure/database/models/SpinWheelSettingModel';
 import './infrastructure/database/models/SpinWheelSegmentModel';
 import './infrastructure/database/models/SpinHistoryModel';
+import './infrastructure/database/models/CertificationModel';
 
 const app = express();
 
@@ -138,6 +141,8 @@ app.use('/api/user/loyalty', userLoyaltyRoutes);
 app.use('/api/user/influencer', userInfluencerRoutes);
 app.use('/api/user/spin-wheel', userSpinWheelRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/admin/certifications', adminCertificationRoutes);
+app.use('/api/user/certifications', userCertificationRoutes);
 
 // Error Handler
 app.use(errorHandler);

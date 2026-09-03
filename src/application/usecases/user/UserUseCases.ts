@@ -9,6 +9,7 @@ import {
 import { IUserRepository } from '../../../domain/repositories/IUserRepository';
 import { IStaffRepository } from '../../../domain/repositories/IStaffRepository';
 import { IAddressRepository, IStateRepository } from '../../../domain/repositories/ILocationRepository';
+import { IPasswordService } from '../../../domain/services/IPasswordService';
 import { NotFoundError } from '../../../shared/utils/AppError';
 import cloudinary from '../../../infrastructure/config/cloudinary';
 
@@ -44,7 +45,8 @@ export class GetMeUseCase implements IGetMeUseCase {
 @injectable()
 export class UpdateProfileUseCase implements IUpdateProfileUseCase {
     constructor(
-        @inject('IUserRepository') private userRepository: IUserRepository
+        @inject('IUserRepository') private userRepository: IUserRepository,
+        @inject('IPasswordService') private passwordService: IPasswordService
     ) {}
 
     async execute(userId: string, data: { username?: string; password?: string; avatar?: string }): Promise<any> {
@@ -59,7 +61,7 @@ export class UpdateProfileUseCase implements IUpdateProfileUseCase {
         }
 
         if (data.password && data.password.trim().length >= 8) {
-            user.password = data.password.trim();
+            user.password = await this.passwordService.hash(data.password.trim());
         }
 
         if (data.avatar && data.avatar.startsWith('data:image')) {

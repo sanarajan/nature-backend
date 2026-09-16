@@ -24,7 +24,9 @@ export class AdminReturnCancellationUseCases {
         item.returnRequest.adminNotes = adminNotes || getReturnInstructionsTemplate();
 
         item.orderStatus = 'Return Approved';
-        order.globalOrderStatus = (order as any).calculateGlobalOrderStatus();
+        order.markModified('orderedProducts');
+        order.globalOrderStatus = (OrderModel as any).calculateGlobalStatus(order.orderedProducts);
+        order.markModified('globalOrderStatus');
 
         order.statusHistory.push({
             status: `Return Request Accepted for: ${item.productName}`,
@@ -56,7 +58,9 @@ export class AdminReturnCancellationUseCases {
         item.returnRequest.isRejected = true;
         item.returnRequest.rejectionReason = rejectionReason;
 
-        order.globalOrderStatus = (order as any).calculateGlobalOrderStatus();
+        order.markModified('orderedProducts');
+        order.globalOrderStatus = (OrderModel as any).calculateGlobalStatus(order.orderedProducts);
+        order.markModified('globalOrderStatus');
 
         order.statusHistory.push({
             status: `Return Request Rejected for: ${item.productName}`,
@@ -98,7 +102,9 @@ export class AdminReturnCancellationUseCases {
             order.paymentStatus = 'Refund_Pending';
         }
 
-        order.globalOrderStatus = (order as any).calculateGlobalOrderStatus();
+        order.markModified('orderedProducts');
+        order.globalOrderStatus = (OrderModel as any).calculateGlobalStatus(order.orderedProducts);
+        order.markModified('globalOrderStatus');
 
         order.statusHistory.push({
             status: `Returned: ${item.productName}`,
@@ -134,7 +140,9 @@ export class AdminReturnCancellationUseCases {
             order.paymentStatus = 'Refund_Pending';
         }
 
-        order.globalOrderStatus = (order as any).calculateGlobalOrderStatus();
+        order.markModified('orderedProducts');
+        order.globalOrderStatus = (OrderModel as any).calculateGlobalStatus(order.orderedProducts);
+        order.markModified('globalOrderStatus');
 
         order.statusHistory.push({
             status: `Cancellation Accepted for: ${item.productName}`,
@@ -194,7 +202,9 @@ export class AdminReturnCancellationUseCases {
         item.cancellation.isRejected = true;
         item.cancellation.rejectionReason = rejectionReason;
 
-        order.globalOrderStatus = (order as any).calculateGlobalOrderStatus();
+        order.markModified('orderedProducts');
+        order.globalOrderStatus = (OrderModel as any).calculateGlobalStatus(order.orderedProducts);
+        order.markModified('globalOrderStatus');
 
         order.statusHistory.push({
             status: `Cancellation Rejected for: ${item.productName}`,

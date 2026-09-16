@@ -8,6 +8,9 @@ import {
     UpdateDeliveryDelayUseCase
 } from '../../application/usecases/admin/AdminOrderUseCases';
 import { AdminReturnCancellationUseCases } from '../../application/usecases/admin/AdminReturnCancellationUseCases';
+import { InvoiceGeneratorService } from '../../infrastructure/services/InvoiceGeneratorService';
+import { OrderModel } from '../../infrastructure/database/models/OrderModel';
+import { AppError } from '../../shared/utils/AppError';
 
 @injectable()
 export class AdminOrderController {
@@ -131,6 +134,42 @@ export class AdminOrderController {
             const adminName = (req as any).admin?.displayName || 'Admin';
             const updatedOrder = await this.updateDeliveryDelayUseCase.execute(id, productId, req.body, adminName);
             res.status(200).json({ success: true, message: 'Delivery delay updated successfully', data: updatedOrder });
+        } catch (error: any) {
+            next(error);
+        }
+    };
+
+    downloadInvoice = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const id = req.params.id as string;
+            const order = await OrderModel.findById(id).populate({ path: 'userId', model: 'User', select: 'displayName email phoneNumber' });
+            
+            if (!order) {
+                throw new AppError('Order not found', 404);
+            }
+            
+            if (!order.invoiceFinalized) {
+                const excludedStatuses = ['Cancelled', 'Returned', 'Return', 'Expired', 'Return Approved'];
+                const preShipmentStatuses = ['Pending', 'Order Placed', 'Processing', 'Cancellation Request', 'Return Request'];
+                
+                const applicableProducts = order.orderedProducts.filter(p => !excludedStatuses.includes(p.orderStatus));
+                const hasPreShipment = applicableProducts.some(p => preShipmentStatuses.includes(p.orderStatus));
+                
+                if (applicableProducts.length > 0 && !hasPreShipment) {
+                    order.invoiceFinalized = true;
+                    order.invoiceFinalizedAt = new Date();
+                    console.log(`[INVOICE] Lazy finalized invoice data for Order ${order.orderId} on download`);
+                    await order.save();
+                } else {
+                    throw new AppError('Invoice not available for this order yet', 400);
+                }
+            }
+
+            const pdfBuffer = await InvoiceGeneratorService.generateInvoice(order);
+            
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=Naturalayam-Invoice-${order.orderId}.pdf`);
+            res.send(pdfBuffer);
         } catch (error: any) {
             next(error);
         }

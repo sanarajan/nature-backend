@@ -258,7 +258,7 @@ export class UpdateOrderStatusUseCase {
         }
 
         order.markModified('orderedProducts');
-        order.globalOrderStatus = (order as any).calculateGlobalOrderStatus();
+        order.globalOrderStatus = (OrderModel as any).calculateGlobalStatus(order.orderedProducts);
         order.markModified('globalOrderStatus');
 
         console.log(`[USE CASE] Order ${order.orderId} updated to: ${order.globalOrderStatus}`);
@@ -326,6 +326,21 @@ export class UpdateOrderStatusUseCase {
             timestamp: new Date(),
             updatedBy: adminName
         });
+
+        // Invoice Finalization logic
+        if (!order.invoiceFinalized) {
+            const excludedStatuses = ['Cancelled', 'Returned', 'Return', 'Expired', 'Return Approved'];
+            const preShipmentStatuses = ['Pending', 'Order Placed', 'Processing', 'Cancellation Request', 'Return Request'];
+            
+            const applicableProducts = order.orderedProducts.filter(p => !excludedStatuses.includes(p.orderStatus));
+            const hasPreShipment = applicableProducts.some(p => preShipmentStatuses.includes(p.orderStatus));
+            
+            if (applicableProducts.length > 0 && !hasPreShipment) {
+                order.invoiceFinalized = true;
+                order.invoiceFinalizedAt = new Date();
+                console.log(`[INVOICE] Finalized invoice data for Order ${order.orderId}`);
+            }
+        }
 
         await order.save();
 

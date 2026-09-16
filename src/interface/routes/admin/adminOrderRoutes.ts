@@ -8,6 +8,7 @@ const controller = container.resolve(AdminOrderController);
 
 router.get('/', adminAuthProtect, (req, res, next) => controller.getAllOrders(req, res, next));
 router.get('/:id', adminAuthProtect, (req, res, next) => controller.getOrderById(req, res, next));
+router.get('/:id/invoice', adminAuthProtect, (req, res, next) => controller.downloadInvoice(req, res, next));
 router.patch('/:id/status', adminAuthProtect, (req, res, next) => controller.updateOrderStatus(req, res, next));
 router.patch('/:id/payment-status', adminAuthProtect, adminOnly, (req, res, next) => controller.updatePaymentStatus(req, res, next));
 

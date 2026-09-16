@@ -139,6 +139,10 @@ export interface IOrderDocument extends Document {
     deliveredAt?: Date;
     returnExpiryDate?: Date;
     
+    // Invoice System
+    invoiceFinalized?: boolean;
+    invoiceFinalizedAt?: Date;
+    
     createdAt: Date;
     updatedAt: Date;
     calculateGlobalOrderStatus(): 'PENDING' | 'PLACED' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'PARTIALLY_DELIVERED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'PARTIALLY_CANCELLED' | 'PROCESSING' | 'PARTIALLY_PROCESSING' | 'CANCELLATION_REQUEST' | 'RETURN_REQUEST' | 'Expired' | 'Order Placed' | 'Processed' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Partially Delivered' | 'Partially Fulfilled' | 'Cancelled' | 'Partially Returned' | 'Returned' | 'Closed' | 'Return Request Pending' | 'Return Approved' | 'Cancel Request Pending' | 'Action Required';
@@ -302,7 +306,11 @@ const orderSchema = new Schema<IOrderDocument>({
     
     // Delivery and Return Tracking
     deliveredAt: { type: Date },
-    returnExpiryDate: { type: Date }
+    returnExpiryDate: { type: Date },
+
+    // Invoice System
+    invoiceFinalized: { type: Boolean, default: false },
+    invoiceFinalizedAt: { type: Date }
 
 }, { timestamps: true });
 

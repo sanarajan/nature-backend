@@ -593,10 +593,10 @@ export class SharedPricingService {
                     isEligible: isInfluencerDiscountEligible,
                     daysRemaining: influencerDaysRemaining
                 } : null,
-                influencerEligibility: {
+                influencerEligibility: appliedInfluencer ? {
                     isEligible: isInfluencerDiscountEligible,
                     daysRemaining: influencerDaysRemaining
-                },
+                } : null,
                 discountType: influencerDiscountAmount > 0 ? "Influencer" : (hasComboOffer ? "Combo" : (hasProductOfferFlag ? "Product" : (appliedCouponId ? "Coupon" : (appliedReferralCode ? "Referral" : "")))),
                 totalDiscount: finalDiscountAmount,
                 naturePointsDiscount,
@@ -623,10 +623,10 @@ export class SharedPricingService {
                 isEligible: isInfluencerDiscountEligible,
                 daysRemaining: influencerDaysRemaining
             } : null,
-            influencerEligibility: {
+            influencerEligibility: appliedInfluencer ? {
                 isEligible: isInfluencerDiscountEligible,
                 daysRemaining: influencerDaysRemaining
-            },
+            } : null,
             influencerCode: appliedInfluencer ? activeInfluencerCode : null,
             naturePointsDiscount,
             naturePointsUsed,

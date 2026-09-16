@@ -730,7 +730,9 @@ export class RequestItemCancellationUseCase {
             item.cancellation.adminNotes = remarks; // Using adminNotes temporarily for remarks
         }
 
-        order.globalOrderStatus = (order as any).calculateGlobalOrderStatus();
+        order.markModified('orderedProducts');
+        order.globalOrderStatus = (OrderModel as any).calculateGlobalStatus(order.orderedProducts);
+        order.markModified('globalOrderStatus');
 
         order.statusHistory.push({
             status: `Item Cancellation Requested: ${item.productName}`,
@@ -816,7 +818,9 @@ export class RequestReturnUseCase {
             throw new AppError('No eligible items to return (must be within 7 days of delivery).', STATUS_CODES.BAD_REQUEST);
         }
 
-        order.globalOrderStatus = (order as any).calculateGlobalOrderStatus();
+        order.markModified('orderedProducts');
+        order.globalOrderStatus = (OrderModel as any).calculateGlobalStatus(order.orderedProducts);
+        order.markModified('globalOrderStatus');
 
         order.statusHistory.push({
             status: `Return requested for: ${updatedItems.join(', ')}`,
@@ -900,7 +904,9 @@ export class RequestItemReturnUseCase {
         if (remarks) item.returnRequest.remarks = remarks;
         if (uploadedImages.length > 0) item.returnRequest.images = uploadedImages;
 
-        order.globalOrderStatus = (order as any).calculateGlobalOrderStatus();
+        order.markModified('orderedProducts');
+        order.globalOrderStatus = (OrderModel as any).calculateGlobalStatus(order.orderedProducts);
+        order.markModified('globalOrderStatus');
 
         order.statusHistory.push({
             status: `Item Return Requested: ${item.productName}`,

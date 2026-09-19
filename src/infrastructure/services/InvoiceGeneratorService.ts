@@ -87,9 +87,9 @@ export class InvoiceGeneratorService {
         this.generateHr(doc, invoiceTableTop + 20);
         doc.font('Helvetica');
 
-        const excludedStatuses = ['Cancelled', 'Returned', 'Return', 'Expired', 'Return Approved'];
-        const activeItems = order.orderedProducts.filter(p => !excludedStatuses.includes(p.orderStatus));
-        const excludedItems = order.orderedProducts.filter(p => excludedStatuses.includes(p.orderStatus));
+        const terminalNonSaleStatuses = ['Cancelled', 'Cancellation Request', 'Expired'];
+        const activeItems = order.orderedProducts.filter(p => !terminalNonSaleStatuses.includes(p.orderStatus));
+        const excludedItems = order.orderedProducts.filter(p => terminalNonSaleStatuses.includes(p.orderStatus));
 
         let i = 0;
         for (i = 0; i < activeItems.length; i++) {
@@ -171,6 +171,18 @@ export class InvoiceGeneratorService {
             nextPosition += 20;
         }
 
+        if (order.cancelledAmount && order.cancelledAmount > 0) {
+            this.generateTableRow(
+                doc,
+                nextPosition,
+                '',
+                '',
+                'Cancelled Items Deduction',
+                `- Rs. ${order.cancelledAmount.toFixed(2)}`
+            );
+            nextPosition += 20;
+        }
+
         doc.font('Helvetica-Bold');
         this.generateTableRow(
             doc,
@@ -178,9 +190,22 @@ export class InvoiceGeneratorService {
             '',
             '',
             'Grand Total',
-            `Rs. ${(order.totalAmount || 0).toFixed(2)}`
+            `Rs. ${((order.totalAmount || 0) - (order.cancelledAmount || 0)).toFixed(2)}`
         );
         doc.font('Helvetica');
+
+        const totalRefund = (order.refundedAmount || 0) > 0 ? order.refundedAmount : (order.returnedAmount || 0);
+        if (totalRefund && totalRefund > 0) {
+            const finalPosition = nextPosition + 30;
+            this.generateTableRow(
+                doc,
+                finalPosition,
+                '',
+                '',
+                'Refunded/Returned Amount',
+                `Rs. ${totalRefund.toFixed(2)}`
+            );
+        }
 
         // CANCELLED / EXCLUDED ITEMS SECTION
         if (excludedItems.length > 0) {

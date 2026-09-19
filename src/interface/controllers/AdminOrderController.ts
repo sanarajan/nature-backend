@@ -149,13 +149,13 @@ export class AdminOrderController {
             }
             
             if (!order.invoiceFinalized) {
-                const excludedStatuses = ['Cancelled', 'Returned', 'Return', 'Expired', 'Return Approved'];
-                const preShipmentStatuses = ['Pending', 'Order Placed', 'Processing', 'Cancellation Request', 'Return Request'];
+                const terminalNonSaleStatuses = ['Cancelled', 'Expired'];
+                const unresolvedStatuses = ['Pending', 'Order Placed', 'Processing', 'Cancellation Request'];
                 
-                const applicableProducts = order.orderedProducts.filter(p => !excludedStatuses.includes(p.orderStatus));
-                const hasPreShipment = applicableProducts.some(p => preShipmentStatuses.includes(p.orderStatus));
+                const applicableProducts = order.orderedProducts.filter((p: any) => !terminalNonSaleStatuses.includes(p.orderStatus));
+                const hasUnresolved = applicableProducts.some((p: any) => unresolvedStatuses.includes(p.orderStatus));
                 
-                if (applicableProducts.length > 0 && !hasPreShipment) {
+                if (applicableProducts.length > 0 && !hasUnresolved) {
                     order.invoiceFinalized = true;
                     order.invoiceFinalizedAt = new Date();
                     console.log(`[INVOICE] Lazy finalized invoice data for Order ${order.orderId} on download`);

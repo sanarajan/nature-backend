@@ -91,6 +91,7 @@ export class PlaceOrderUseCase {
                     image: cp.product.images && cp.product.images.length > 0 ? cp.product.images[0] : '',
                     price: Number(cp.product.price) || 0,
                     totalFinalPrice: 0,
+                    comboQuantity: 0,
                     discounts: {}
                 };
             }
@@ -98,6 +99,7 @@ export class PlaceOrderUseCase {
             orderedProductsMap[pId].totalFinalPrice += cp.finalUnitPrice * cp.quantity;
 
             if (cp.isComboItem && calculated.appliedComboOffer) {
+                orderedProductsMap[pId].comboQuantity += cp.quantity;
                 const share = calculated.pricing.comboDistributions?.[pId] || 0;
                 orderedProductsMap[pId].discounts.comboOffer = {
                     offerId: calculated.appliedComboOffer._id,
@@ -710,6 +712,11 @@ export class RequestItemCancellationUseCase {
         if (!item) {
             throw new AppError('Item not found in this order', STATUS_CODES.NOT_FOUND);
         }
+        
+        const isComboProtected = (item.comboQuantity && item.comboQuantity > 0) || (item.discounts && item.discounts.comboOffer && item.discounts.comboOffer.offerId);
+        if (isComboProtected) {
+            throw new AppError('This item is part of a Combo Offer and cannot be individually cancelled.', STATUS_CODES.BAD_REQUEST);
+        }
 
         const restrictedStatuses = ['SHIPPED', 'PARTIALLY_SHIPPED', 'DELIVERED', 'PARTIALLY_DELIVERED', 'COMPLETED', 'RETURNED', 'PARTIALLY_RETURNED'];
         if (restrictedStatuses.includes(order.globalOrderStatus)) {
@@ -880,6 +887,11 @@ export class RequestItemReturnUseCase {
 
         if (!this.isEligibleForReturn(item, order)) {
             throw new AppError('Item is not eligible for return. It must be in "Delivered" status and within 7 days of delivery.', STATUS_CODES.BAD_REQUEST);
+        }
+
+        const isComboProtected = (item.comboQuantity && item.comboQuantity > 0) || (item.discounts && item.discounts.comboOffer && item.discounts.comboOffer.offerId);
+        if (isComboProtected) {
+            throw new AppError('This item is part of a Combo Offer and cannot be individually returned.', STATUS_CODES.BAD_REQUEST);
         }
 
         let uploadedImages: string[] = [];

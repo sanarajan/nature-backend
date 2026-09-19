@@ -42,6 +42,7 @@ export interface IOrderedProduct {
             discountAmount: number;
         };
     };
+    comboQuantity?: number;
     orderStatus: 'Pending' | 'Order Placed' | 'Processing' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Cancelled' | 'Cancellation Request' | 'Return Request' | 'Return Approved' | 'Return' | 'Returned' | 'Expired';
     shippingDetails?: {
         agencyName: string;
@@ -225,6 +226,7 @@ const orderSchema = new Schema<IOrderDocument>({
                 discountAmount: { type: Number, default: 0 }
             }
         },
+        comboQuantity: { type: Number, default: 0 },
         influencerDiscount: { type: Number, default: 0 },
         influencerDiscountAmount: { type: Number, default: 0 },
         influencerCommissionRate: { type: Number },

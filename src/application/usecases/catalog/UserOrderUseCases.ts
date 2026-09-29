@@ -78,12 +78,26 @@ export class PlaceOrderUseCase {
             }
         }
 
-        // Group the split products from `calculated.products` back by productId
+        // Group the split products from `calculated.products` back by a deterministic context key
+        // Context includes: productId + combo legacy flag + combo allocations + product offer
         const orderedProductsMap: any = {};
         for (const cp of calculated.products) {
             const pId = cp.product._id.toString();
-            if (!orderedProductsMap[pId]) {
-                orderedProductsMap[pId] = {
+            
+            let contextKey = pId;
+            if (cp.isComboItem && calculated.appliedComboOffer) {
+                contextKey += `_LCOMBO_${calculated.appliedComboOffer._id}`;
+            }
+            if (cp.comboAllocations && cp.comboAllocations.length > 0) {
+                const comboSig = [...cp.comboAllocations].map((a: any) => a.comboOfferId.toString()).sort().join('-');
+                contextKey += `_ALLOCS_${comboSig}`;
+            }
+            if (cp.appliedProductOffer) {
+                contextKey += `_POFFER_${cp.appliedProductOffer.offerId}`;
+            }
+
+            if (!orderedProductsMap[contextKey]) {
+                orderedProductsMap[contextKey] = {
                     productId: cp.product._id,
                     productName: cp.product.productName,
                     category: cp.product.categoryId,
@@ -92,42 +106,60 @@ export class PlaceOrderUseCase {
                     price: Number(cp.product.price) || 0,
                     totalFinalPrice: 0,
                     comboQuantity: 0,
-                    discounts: {}
+                    discounts: {},
+                    comboAllocations: []
                 };
             }
-            orderedProductsMap[pId].quantity += cp.quantity;
-            orderedProductsMap[pId].totalFinalPrice += cp.finalUnitPrice * cp.quantity;
+            orderedProductsMap[contextKey].quantity += cp.quantity;
+            orderedProductsMap[contextKey].totalFinalPrice += cp.finalUnitPrice * cp.quantity;
 
             if (cp.isComboItem && calculated.appliedComboOffer) {
-                orderedProductsMap[pId].comboQuantity += cp.quantity;
+                orderedProductsMap[contextKey].comboQuantity += cp.quantity;
                 const share = calculated.pricing.comboDistributions?.[pId] || 0;
-                orderedProductsMap[pId].discounts.comboOffer = {
+                orderedProductsMap[contextKey].discounts.comboOffer = {
                     offerId: calculated.appliedComboOffer._id,
                     offerName: calculated.appliedComboOffer.offerName,
                     discountAmount: share
                 };
             }
 
+            if (cp.comboAllocations && cp.comboAllocations.length > 0) {
+                cp.comboAllocations.forEach((alloc: any) => {
+                    const existingAlloc = orderedProductsMap[contextKey].comboAllocations.find((a: any) => a.comboOfferId.toString() === alloc.comboOfferId.toString());
+                    if (existingAlloc) {
+                        existingAlloc.quantity += alloc.quantity;
+                        existingAlloc.discountAmount += alloc.discountAmount;
+                    } else {
+                        orderedProductsMap[contextKey].comboAllocations.push({
+                            comboOfferId: alloc.comboOfferId,
+                            comboOfferName: alloc.comboOfferName,
+                            quantity: alloc.quantity,
+                            discountAmount: alloc.discountAmount
+                        });
+                    }
+                });
+            }
+
             if (cp.appliedProductOffer) {
                 const originalPrice = Number(cp.product.price) || 0;
                 const unitDiscount = originalPrice - cp.finalUnitPrice;
                 const amt = Math.round(unitDiscount * cp.quantity);
-                orderedProductsMap[pId].discounts.productOffer = {
+                orderedProductsMap[contextKey].discounts.productOffer = {
                     offerId: cp.appliedProductOffer.offerId,
                     offerName: cp.appliedProductOffer.offerName,
-                    discountAmount: amt
+                    discountAmount: (orderedProductsMap[contextKey].discounts.productOffer?.discountAmount || 0) + amt
                 };
             }
 
             if (cp.influencerDiscountAmount && cp.influencerDiscountAmount > 0) {
-                if (!orderedProductsMap[pId].discounts.influencerDiscount) {
-                    orderedProductsMap[pId].discounts.influencerDiscount = {
+                if (!orderedProductsMap[contextKey].discounts.influencerDiscount) {
+                    orderedProductsMap[contextKey].discounts.influencerDiscount = {
                         influencerId: resolvedInfluencerId || null,
                         influencerCode: resolvedInfluencerCode || null,
                         discountAmount: 0
                     };
                 }
-                orderedProductsMap[pId].discounts.influencerDiscount.discountAmount += Math.round(cp.influencerDiscountAmount);
+                orderedProductsMap[contextKey].discounts.influencerDiscount.discountAmount += Math.round(cp.influencerDiscountAmount);
             }
         }
 
@@ -191,6 +223,24 @@ export class PlaceOrderUseCase {
         let useExistingOrder: any = null;
 
         if (existingPendingOrder) {
+            const getRowSignature = (p: any) => {
+                let sig = `${p.productId?.toString()}_${p.quantity}_${p.finalPrice}_${p.comboQuantity || 0}`;
+                if (p.discounts?.comboOffer?.offerId) {
+                    sig += `_LCOMBO_${p.discounts.comboOffer.offerId.toString()}`;
+                }
+                if (p.comboAllocations && p.comboAllocations.length > 0) {
+                    const sortedAllocs = [...p.comboAllocations].map((a: any) => a.comboOfferId.toString()).sort();
+                    sig += `_ALLOCS_${sortedAllocs.join('-')}`;
+                }
+                if (p.discounts?.productOffer?.offerId) {
+                    sig += `_POFFER_${p.discounts.productOffer.offerId.toString()}`;
+                }
+                return sig;
+            };
+
+            const existingSigs = existingPendingOrder.orderedProducts.map(getRowSignature).sort();
+            const newSigs = orderedProducts.map(getRowSignature).sort();
+
             const isSame = 
                 existingPendingOrder.totalAmount === totalAmount &&
                 existingPendingOrder.totalMRP === totalMRP &&
@@ -198,15 +248,13 @@ export class PlaceOrderUseCase {
                 existingPendingOrder.totalDiscount === finalDiscountAmount &&
                 existingPendingOrder.address?.pincode === Number(addressDoc.pincode) &&
                 existingPendingOrder.orderedProducts.length === orderedProducts.length &&
-                existingPendingOrder.orderedProducts.every((ep: any) => {
-                    const newP = orderedProducts.find((np: any) => np.productId?.toString() === ep.productId?.toString());
-                    return newP && newP.quantity === ep.quantity && newP.finalPrice === ep.finalPrice;
-                });
+                existingSigs.every((sig: string, idx: number) => sig === newSigs[idx]);
 
             if (isSame) {
                 useExistingOrder = existingPendingOrder;
                 useExistingOrder.paymentMethod = targetPaymentMethod;
                 useExistingOrder.paymentStatus = 'Pending';
+                useExistingOrder.appliedComboOffers = calculated.appliedComboOffers || [];
                 
                 if (!isOnline) {
                     useExistingOrder.globalOrderStatus = 'Order Placed';
@@ -338,6 +386,7 @@ export class PlaceOrderUseCase {
                 hasComboOffer: hasComboOffer,
                 hasProductOffer: hasProductOfferFlag,
                 appliedOffersSummary: summary.trim(),
+                appliedComboOffers: calculated.appliedComboOffers || [],
                 orderedProducts: orderedProducts,
                 influencerId: influencerId,
                 influencerCode: influencerCode,
@@ -351,6 +400,7 @@ export class PlaceOrderUseCase {
             });
         } else {
             newOrder.orderedProducts = orderedProducts;
+            newOrder.appliedComboOffers = calculated.appliedComboOffers || [];
             newOrder.influencerId = influencerId;
             newOrder.influencerCode = influencerCode;
             newOrder.influencerSource = influencerSource;

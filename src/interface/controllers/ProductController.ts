@@ -62,4 +62,14 @@ export class ProductController {
             next(error);
         }
     };
+
+    getComboOfferByIdOrSlug = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const slug = req.params.slug as string;
+            const combo = await this.productUseCases.getComboOfferByIdOrSlug(slug);
+            res.status(200).json({ success: true, data: combo });
+        } catch (error: any) {
+            next(error);
+        }
+    };
 }

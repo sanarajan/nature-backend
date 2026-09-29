@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { injectable, inject } from 'tsyringe';
-import { AddComboOfferUseCase, GetAllComboOffersUseCase, UpdateComboOfferUseCase, DeleteComboOfferUseCase, ToggleComboOfferStatusUseCase } from '../../application/usecases/admin/AdminComboOfferUseCases';
+import { AddComboOfferUseCase, GetAllComboOffersUseCase, GetComboOfferByIdUseCase, UpdateComboOfferUseCase, DeleteComboOfferUseCase, ToggleComboOfferStatusUseCase } from '../../application/usecases/admin/AdminComboOfferUseCases';
 
 @injectable()
 export class AdminComboOfferController {
     constructor(
         @inject('IAddComboOfferUseCase') private addComboOfferUseCase: AddComboOfferUseCase,
         @inject('IGetAllComboOffersUseCase') private getAllComboOffersUseCase: GetAllComboOffersUseCase,
+        @inject('IGetComboOfferByIdUseCase') private getComboOfferByIdUseCase: GetComboOfferByIdUseCase,
         @inject('IUpdateComboOfferUseCase') private updateComboOfferUseCase: UpdateComboOfferUseCase,
         @inject('IDeleteComboOfferUseCase') private deleteComboOfferUseCase: DeleteComboOfferUseCase,
         @inject('IToggleComboOfferStatusUseCase') private toggleComboOfferStatusUseCase: ToggleComboOfferStatusUseCase
@@ -25,6 +26,16 @@ export class AdminComboOfferController {
         try {
             const offers = await this.getAllComboOffersUseCase.execute();
             res.status(200).json({ success: true, data: offers });
+        } catch (error: any) {
+            next(error);
+        }
+    };
+
+    getComboOfferById = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const id = req.params.id as string;
+            const offer = await this.getComboOfferByIdUseCase.execute(id);
+            res.status(200).json({ success: true, data: offer });
         } catch (error: any) {
             next(error);
         }

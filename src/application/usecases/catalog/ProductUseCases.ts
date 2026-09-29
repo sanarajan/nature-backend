@@ -67,7 +67,8 @@ export class ProductUseCases {
         let products = await this.productRepository.findProducts(
             { isActive: true, $or: [{ featured: true }, { isPopular: true }, { isTrending: true }, { isBestSeller: true }] },
             8,
-            { createdAt: -1 }
+            { createdAt: -1 },
+            { path: 'unitId', select: 'unitName' }
         );
 
         if (products.length < 8) {
@@ -77,7 +78,8 @@ export class ProductUseCases {
             const extraProducts = await this.productRepository.findProducts(
                 { isActive: true, _id: { $nin: excludedIds } },
                 remainingCount,
-                { createdAt: -1 }
+                { createdAt: -1 },
+                { path: 'unitId', select: 'unitName' }
             );
 
             products = [...products, ...extraProducts];
@@ -115,7 +117,8 @@ export class ProductUseCases {
 
         const populateOptions = [
             { path: 'categoryId', select: 'categoryName' },
-            { path: 'subcategoryId', select: 'subcategoryName' }
+            { path: 'subcategoryId', select: 'subcategoryName' },
+            { path: 'unitId', select: 'unitName' }
         ];
 
         const products = await this.productRepository.findProducts(query, undefined, sortOption, populateOptions);
@@ -131,7 +134,8 @@ export class ProductUseCases {
         const products = await this.productRepository.findProducts(
             { isPopular: true, isActive: true },
             8,
-            { createdAt: -1 }
+            { createdAt: -1 },
+            { path: 'unitId', select: 'unitName' }
         );
         return await this.applyOffers(products);
     }
@@ -145,6 +149,7 @@ export class ProductUseCases {
         // Populate
         await product.populate('categoryId', 'categoryName');
         await product.populate('subcategoryId', 'subcategoryName');
+        await product.populate('unitId', 'unitName');
 
         return (await this.applyOffers([product]))[0];
     }
@@ -236,7 +241,8 @@ export class ProductUseCases {
                 ]
             },
             4,
-            { createdAt: -1 }
+            { createdAt: -1 },
+            { path: 'unitId', select: 'unitName' }
         );
 
         const productsWithOffers = await this.applyOffers(products);
@@ -256,6 +262,46 @@ export class ProductUseCases {
             products: productsWithOffers,
             maxPercent,
             maxAmount
+        };
+    }
+
+    async getComboOfferByIdOrSlug(idOrSlug: string) {
+        const now = new Date();
+        const allCombos = await this.comboOfferRepository.findAllComboOffers();
+        
+        // Find by id or slug
+        const combo = allCombos.find((c: any) => 
+            c._id.toString() === idOrSlug || c.slug === idOrSlug
+        );
+
+        if (!combo || !combo.status || combo.startDate > now || combo.endDate < now) {
+            throw new AppError('Combo Offer not found or inactive', STATUS_CODES.NOT_FOUND);
+        }
+
+        const comboObj: any = combo.toObject ? combo.toObject() : combo;
+        let totalMRP = 0;
+
+        const products = comboObj.products.map((p: any) => {
+            const prodPrice = p.productId?.price || 0;
+            const qty = p.requiredQuantity || p.quantity || 1;
+            totalMRP += prodPrice * qty;
+            return { ...p, quantity: qty };
+        });
+
+        let savings = 0;
+        if (comboObj.discountType === 'percentage') {
+            savings = (totalMRP * comboObj.discountValue) / 100;
+        } else if (comboObj.discountType === 'amount') {
+            savings = comboObj.discountValue;
+        }
+
+        return {
+            ...comboObj,
+            products,
+            totalMRP: Math.round(totalMRP),
+            comboPrice: Math.round(Math.max(0, totalMRP - savings)),
+            savings: Math.round(savings),
+            savingsPercent: totalMRP > 0 ? Math.round((savings / totalMRP) * 100) : 0,
         };
     }
 }

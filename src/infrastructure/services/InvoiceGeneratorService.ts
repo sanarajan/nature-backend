@@ -29,62 +29,104 @@ export class InvoiceGeneratorService {
     }
 
     private static generateHeader(doc: typeof PDFDocument, order: IOrderDocument) {
-        doc.fillColor('#444444')
-            .fontSize(20)
-            .text('NATURALAYAM', 50, 57)
+        // Try multiple paths to accommodate both 'src' and 'dist' execution environments
+        const possiblePaths = [
+            path.resolve(process.cwd(), 'assets/logo.png'),                                 // backend root /assets
+            path.resolve(__dirname, '../../../../assets/logo.png'),                         // from dist/infrastructure/services
+            path.resolve(__dirname, '../../../../../nature-frontend/src/assets/images/logo.png'), // fallback to frontend src
+            path.resolve(process.cwd(), '../nature-frontend/src/assets/images/logo.png')    // fallback to frontend src from backend root
+        ];
+        
+        let logoPath = '';
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                logoPath = p;
+                break;
+            }
+        }
+        
+        // Try to add logo if it exists
+        if (logoPath) {
+            doc.image(logoPath, 50, 45, { fit: [150, 75] });
+        } else {
+            doc.fillColor('#166534')
+                .fontSize(20)
+                .font('Helvetica-Bold')
+                .text('NATURALAYAM', 50, 50);
+        }
+
+        doc.fillColor('#166534')
+            .fontSize(28)
+            .font('Helvetica-Bold')
+            .text('ORDER INVOICE', 50, 45, { align: 'right' })
+            .fillColor('#444444')
             .fontSize(10)
-            .text('Natural & Herbal Wellness', 50, 80)
-            .fontSize(20)
-            .text('ORDER INVOICE', 50, 57, { align: 'right' })
-            .fontSize(10)
-            .text(`Order ID: ${order.orderId}`, 50, 80, { align: 'right' })
-            .text(`Invoice Date: ${order.invoiceFinalizedAt ? order.invoiceFinalizedAt.toLocaleDateString() : order.createdAt.toLocaleDateString()}`, 50, 95, { align: 'right' })
+            .font('Helvetica')
+            .text(`Invoice #: NAT-${order.orderId}`, 50, 75, { align: 'right' })
+            .text(`Date: ${order.invoiceFinalizedAt ? order.invoiceFinalizedAt.toLocaleDateString() : order.createdAt.toLocaleDateString()}`, 50, 90, { align: 'right' })
+            .text(`Order ID: ${order.orderId}`, 50, 105, { align: 'right' })
             .moveDown();
             
-        doc.moveTo(50, 115).lineTo(545, 115).stroke();
+        doc.strokeColor('#166534')
+            .lineWidth(2)
+            .moveTo(50, 135)
+            .lineTo(545, 135)
+            .stroke();
     }
 
     private static generateCustomerInformation(doc: typeof PDFDocument, order: IOrderDocument) {
-        doc.fillColor('#444444')
-            .fontSize(10)
+        doc.fillColor('#166534')
+            .fontSize(11)
             .font('Helvetica-Bold')
-            .text('Sold By', 50, 130)
+            .text('SOLD BY', 50, 155)
+            .fillColor('#444444')
+            .fontSize(10)
             .font('Helvetica')
-            .text('Naturalayam', 50, 145)
-            .text('Thrissur, Kerala', 50, 160)
-            .text('India', 50, 175);
+            .text('Naturalayam', 50, 170)
+            .text('Thrissur, Kerala', 50, 185)
+            .text('India', 50, 200);
 
-        const customerTop = 130;
+        const customerTop = 155;
         const customerX = 300;
 
-        doc.font('Helvetica-Bold')
-            .text('Bill To / Ship To', customerX, customerTop)
+        doc.fillColor('#166534')
+            .fontSize(11)
+            .font('Helvetica-Bold')
+            .text('BILL TO / SHIP TO', customerX, customerTop)
+            .fillColor('#444444')
+            .fontSize(10)
             .font('Helvetica')
             .text(order.address?.house || '', customerX, customerTop + 15)
             .text(`${order.address?.place || ''}, ${order.address?.city || ''}`, customerX, customerTop + 30)
             .text(`${order.address?.district || ''}, ${order.address?.state || ''} - ${order.address?.pincode || ''}`, customerX, customerTop + 45);
             
         if (order.paymentMethod) {
-            doc.text(`Payment Method: ${order.paymentMethod}`, customerX, customerTop + 60);
+            doc.font('Helvetica-Bold').text('Payment Method:', customerX, customerTop + 65)
+               .font('Helvetica').text(order.paymentMethod, customerX + 90, customerTop + 65);
         }
         if (order.paymentStatus) {
-            doc.text(`Payment Status: ${order.paymentStatus}`, customerX, customerTop + 75);
+            doc.font('Helvetica-Bold').text('Payment Status:', customerX, customerTop + 80)
+               .font('Helvetica').fillColor(order.paymentStatus === 'Success' ? '#166534' : '#444444').text(order.paymentStatus, customerX + 90, customerTop + 80);
         }
     }
 
     private static generateInvoiceTable(doc: typeof PDFDocument, order: IOrderDocument) {
-        const invoiceTableTop = 240;
+        let invoiceTableTop = 270;
 
-        doc.font('Helvetica-Bold');
+        // Table Header Background
+        doc.rect(50, invoiceTableTop, 495, 25).fill('#166534');
+        
+        doc.fillColor('#ffffff')
+           .font('Helvetica-Bold');
+           
         this.generateTableRow(
             doc,
-            invoiceTableTop,
-            'Item',
-            'Qty',
-            'Price',
-            'Total'
+            invoiceTableTop + 8,
+            'PRODUCT',
+            'QTY',
+            'UNIT PRICE',
+            'TOTAL'
         );
-        this.generateHr(doc, invoiceTableTop + 20);
         doc.font('Helvetica');
 
         const terminalNonSaleStatuses = ['Cancelled', 'Cancellation Request', 'Expired'];
@@ -92,26 +134,41 @@ export class InvoiceGeneratorService {
         const excludedItems = order.orderedProducts.filter(p => terminalNonSaleStatuses.includes(p.orderStatus));
 
         let i = 0;
+        let position = invoiceTableTop + 25;
         for (i = 0; i < activeItems.length; i++) {
             const item = activeItems[i];
-            const position = invoiceTableTop + (i + 1) * 30;
+            position = invoiceTableTop + 25 + (i * 30);
+            
+            // Check for page break
+            if (position > 700) {
+                doc.addPage();
+                invoiceTableTop = 50;
+                position = invoiceTableTop;
+            }
+
+            // Alternating row background
+            if (i % 2 !== 0) {
+                doc.rect(50, position, 495, 30).fill('#f8fafc');
+            }
+
+            doc.fillColor('#333333');
             const price = item.price || 0;
             
             this.generateTableRow(
                 doc,
-                position,
+                position + 10,
                 item.productName,
                 item.quantity.toString(),
                 `Rs. ${price.toFixed(2)}`,
                 `Rs. ${(price * item.quantity).toFixed(2)}`
             );
 
-            this.generateHr(doc, position + 20);
+            this.generateHr(doc, position + 30);
         }
 
-        const subtotalPosition = invoiceTableTop + (i + 1) * 30;
+        const subtotalPosition = position + 40;
         
-        doc.font('Helvetica-Bold');
+        doc.fillColor('#333333').font('Helvetica');
         this.generateTableRow(
             doc,
             subtotalPosition,
@@ -124,6 +181,7 @@ export class InvoiceGeneratorService {
         let nextPosition = subtotalPosition + 20;
 
         if (order.totalDiscount && order.totalDiscount > 0) {
+            doc.fillColor('#166534');
             this.generateTableRow(
                 doc,
                 nextPosition,
@@ -135,6 +193,7 @@ export class InvoiceGeneratorService {
             nextPosition += 20;
         }
 
+        doc.fillColor('#333333');
         if (order.deliveryCharge) {
             this.generateTableRow(
                 doc,
@@ -160,6 +219,7 @@ export class InvoiceGeneratorService {
         }
 
         if (order.naturePointsDiscount && order.naturePointsDiscount > 0) {
+            doc.fillColor('#166534');
             this.generateTableRow(
                 doc,
                 nextPosition,
@@ -172,6 +232,7 @@ export class InvoiceGeneratorService {
         }
 
         if (order.cancelledAmount && order.cancelledAmount > 0) {
+            doc.fillColor('#d97706');
             this.generateTableRow(
                 doc,
                 nextPosition,
@@ -183,26 +244,29 @@ export class InvoiceGeneratorService {
             nextPosition += 20;
         }
 
-        doc.font('Helvetica-Bold');
+        // Grand Total Row
+        doc.rect(280, nextPosition + 5, 265, 25).fill('#f0fdf4');
+        doc.fillColor('#166534').font('Helvetica-Bold').fontSize(11);
         this.generateTableRow(
             doc,
-            nextPosition + 10,
+            nextPosition + 12,
             '',
             '',
-            'Grand Total',
+            'GRAND TOTAL',
             `Rs. ${((order.totalAmount || 0) - (order.cancelledAmount || 0)).toFixed(2)}`
         );
-        doc.font('Helvetica');
+        doc.font('Helvetica').fontSize(10);
 
         const totalRefund = (order.refundedAmount || 0) > 0 ? order.refundedAmount : (order.returnedAmount || 0);
         if (totalRefund && totalRefund > 0) {
-            const finalPosition = nextPosition + 30;
+            const finalPosition = nextPosition + 40;
+            doc.fillColor('#166534');
             this.generateTableRow(
                 doc,
                 finalPosition,
                 '',
                 '',
-                'Refunded/Returned Amount',
+                'Refunded/Returned',
                 `Rs. ${totalRefund.toFixed(2)}`
             );
         }
@@ -250,13 +314,20 @@ export class InvoiceGeneratorService {
     }
 
     private static generateFooter(doc: typeof PDFDocument) {
-        doc.fontSize(10)
-            .text(
-                'Thank you for shopping with Naturalayam. This is a computer-generated invoice.',
-                50,
-                700,
-                { align: 'center', width: 500 }
-            );
+        doc.strokeColor('#166534')
+            .lineWidth(1)
+            .moveTo(50, 710)
+            .lineTo(545, 710)
+            .stroke();
+            
+        doc.fillColor('#166534')
+            .fontSize(10)
+            .font('Helvetica-Bold')
+            .text('Thank you for choosing Naturalayam.', 50, 725, { align: 'center', width: 500 })
+            .fillColor('#666666')
+            .font('Helvetica')
+            .fontSize(9)
+            .text('This is a computer-generated invoice.', 50, 740, { align: 'center', width: 500 });
     }
 
     private static generateTableRow(
@@ -275,7 +346,7 @@ export class InvoiceGeneratorService {
     }
 
     private static generateHr(doc: typeof PDFDocument, y: number) {
-        doc.strokeColor('#aaaaaa')
+        doc.strokeColor('#e2e8f0')
             .lineWidth(1)
             .moveTo(50, y)
             .lineTo(545, y)

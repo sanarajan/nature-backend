@@ -19,6 +19,25 @@ export interface IProductDocument extends Document {
     isBestSeller: boolean;
     isActive: boolean;
     influencerDiscount?: number;
+    shortDescription?: string;
+    keyBenefits?: string[];
+    keyIngredients?: { name: string, botanicalName?: string, percentage?: string, partType?: string, websiteRole?: string }[];
+    howToUse?: string;
+    otherIngredients?: string;
+    suitableFor?: string;
+    safetyInformation?: string;
+    patchTestGuidance?: string;
+    storageInstructions?: string;
+    faqs?: { question: string, answer: string }[];
+    disclaimer?: string;
+    internalPublishingNote?: string;
+    metaTitle?: string;
+    metaDescription?: string;
+    tags?: string[];
+    slug?: string;
+    imageAltText?: string;
+    labelControl?: string;
+    specialPublishingClaimsNote?: string;
 }
 
 const productSchema = new Schema<IProductDocument>({
@@ -39,7 +58,35 @@ const productSchema = new Schema<IProductDocument>({
     isTrending: { type: Boolean, default: false },
     isBestSeller: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
-    influencerDiscount: { type: Number, default: 0 }
+    influencerDiscount: { type: Number, default: 0 },
+    shortDescription: { type: String },
+    keyBenefits: [{ type: String }],
+    keyIngredients: [{
+        name: { type: String, required: true },
+        botanicalName: { type: String },
+        percentage: { type: String },
+        partType: { type: String },
+        websiteRole: { type: String }
+    }],
+    howToUse: { type: String },
+    otherIngredients: { type: String },
+    suitableFor: { type: String },
+    safetyInformation: { type: String },
+    patchTestGuidance: { type: String },
+    storageInstructions: { type: String },
+    faqs: [{
+        question: { type: String, required: true },
+        answer: { type: String, required: true }
+    }],
+    disclaimer: { type: String },
+    internalPublishingNote: { type: String },
+    metaTitle: { type: String },
+    metaDescription: { type: String },
+    tags: [{ type: String }],
+    slug: { type: String },
+    imageAltText: { type: String },
+    labelControl: { type: String },
+    specialPublishingClaimsNote: { type: String }
 }, { timestamps: true });
 
 // Compound index to ensure uniqueness across productName, category, subcategory, unit, and quantity

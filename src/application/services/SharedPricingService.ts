@@ -13,6 +13,9 @@ import { LoyaltySettingModel } from '../../infrastructure/database/models/Loyalt
 import { OrderModel } from '../../infrastructure/database/models/OrderModel';
 import { SpinHistoryModel } from '../../infrastructure/database/models/SpinHistoryModel';
 import { UserLoyaltyUseCases } from '../usecases/user/UserLoyaltyUseCases';
+import { MultiComboPricingAdapter } from './MultiComboPricingAdapter';
+import { MultiComboAllocator } from './MultiComboAllocator';
+
 
 const roundTo2 = (num: number) => Math.round(num * 100) / 100;
 
@@ -57,165 +60,133 @@ export class SharedPricingService {
         let bestCombo: any = null;
         let bestComboDiscount = 0;
         let applications = 0;
-
-        for (const combo of activeComboOffers) {
-            let isComboMet = true;
-            let comboSetMRP = 0;
-
-            if (!combo.products || !Array.isArray(combo.products)) continue;
-
-            const requirements: Record<string, number> = {};
-            for (const cp of combo.products) {
-                const prodDoc: any = cp.productId;
-                const pId = prodDoc?._id?.toString() || cp.productId?.toString();
-                if (!pId) continue;
-                requirements[pId] = (requirements[pId] || 0) + cp.requiredQuantity;
-                
-                const price = Number(prodDoc?.price) || 0;
-                comboSetMRP += price * cp.requiredQuantity;
-            }
-
-            const requiredPIds = Object.keys(requirements);
-            if (requiredPIds.length === 0) continue;
-
-            for (const pId of requiredPIds) {
-                const cartItem = cart.products.find((cp: any) => cp.product?._id?.toString() === pId);
-                if (!cartItem || cartItem.quantity < requirements[pId]) {
-                    isComboMet = false;
-                    break;
-                }
-            }
-
-            if (isComboMet) {
-                let possibleApps = Infinity;
-                for (const pId of requiredPIds) {
-                    const cartItem = cart.products.find((i: any) => i.product?._id?.toString() === pId);
-                    if (!cartItem) continue;
-                    const appsForThisProd = Math.floor(cartItem.quantity / requirements[pId]);
-                    possibleApps = Math.min(possibleApps, appsForThisProd);
-                }
-
-                if (possibleApps > 0 && possibleApps !== Infinity) {
-                    let combosToApply = possibleApps;
-                    if (combo.maxUsagePerOrder && combo.maxUsagePerOrder > 0) {
-                        combosToApply = Math.min(possibleApps, combo.maxUsagePerOrder);
-                    }
-
-                    let discount = 0;
-                    const comboBaseAmount = roundTo2(comboSetMRP * combosToApply);
-
-                    if (combo.discountType === 'percentage') {
-                        discount = roundTo2((comboBaseAmount * (combo.discountValue || 0)) / 100);
-                    } else {
-                        discount = roundTo2((combo.discountValue || 0) * combosToApply);
-                    }
-
-                    if (discount > bestComboDiscount) {
-                        bestComboDiscount = discount;
-                        bestCombo = combo;
-                        applications = combosToApply;
-                        hasComboOffer = true;
-                    }
-                }
-            }
-        }
-
-        if (bestCombo) {
-            appliedComboOfferId = bestCombo._id;
-            appliedComboOfferName = bestCombo.offerName;
-        }
-
-        const comboDistributions: Record<string, number> = {};
-        if (bestCombo && applications > 0) {
-            let remainingComboDiscount = bestComboDiscount;
-            const itemsToDistribute: any[] = [];
-            let actualUsedMRPTotal = 0;
-
-            cart.products.forEach((item: any) => {
-                const pIdString = item.product?._id?.toString();
-                if (!pIdString) return;
-
-                const reqPerSet = bestCombo.products.reduce((acc: number, cp: any) => {
-                    const cpId = cp.productId?._id?.toString() || cp.productId?.toString();
-                    return cpId === pIdString ? acc + cp.requiredQuantity : acc;
-                }, 0);
-
-                if (reqPerSet > 0) {
-                    const usedQty = reqPerSet * applications;
-                    const price = Number(item.product?.price) || 0;
-                    const usedMRP = roundTo2(price * usedQty);
-                    actualUsedMRPTotal += usedMRP;
-                    itemsToDistribute.push({ pId: pIdString, usedMRP });
-                }
-            });
-
-            itemsToDistribute.forEach((item, idx) => {
-                if (idx === itemsToDistribute.length - 1) {
-                    comboDistributions[item.pId] = roundTo2(remainingComboDiscount);
-                } else {
-                    const share = roundTo2((item.usedMRP / actualUsedMRPTotal) * bestComboDiscount);
-                    comboDistributions[item.pId] = share;
-                    remainingComboDiscount = roundTo2(remainingComboDiscount - share);
-                }
-            });
-        }
-
         let totalMRP = 0;
         let grandTotalDiscount = 0;
         let hasProductOfferFlag = false;
-
-        const comboProductIds = new Set(
-            bestCombo?.products.map((p: any) =>
-                p.productId?._id?.toString() || p.productId?.toString()
-            )
-        );
-
+        let appliedComboOffersList: any[] = [];
         const finalProducts: any[] = [];
+        let comboDistributions: Record<string, number> = {};
 
-        cart.products.filter((item: any) => item.product).forEach((item: any) => {
-            const p = item.product as any;
-            const originalPrice = Number(p?.price) || 0;
-            const totalQty = item.quantity || 1;
-            totalMRP += (originalPrice * totalQty);
-            const pIdString = p?._id?.toString();
+        const isMultiMode = process.env.ENABLE_MULTI_COMBO_PRICING === 'true';
 
-            let qtyInCombo = 0;
-            if (bestCombo) {
-                const reqPerSet = bestCombo.products.reduce((acc: number, cp: any) => {
-                    const cpId = cp.productId?._id?.toString() || cp.productId?.toString();
-                    return cpId === pIdString ? acc + cp.requiredQuantity : acc;
-                }, 0);
-                qtyInCombo = reqPerSet * applications;
+        if (isMultiMode) {
+            let multiComboResult: any = null;
+            try {
+                const adapterInput = MultiComboPricingAdapter.buildAllocatorInput(cart, activeComboOffers);
+                multiComboResult = MultiComboAllocator.calculateBestAllocation(adapterInput.cartItems, adapterInput.comboOffers);
+            } catch (err) {
+                console.error('Multi-combo engine error:', err);
+                throw err;
             }
 
-            const qtyEligibleForIndividualOffer = totalQty - qtyInCombo;
-            let productTotalDiscount = 0;
+            cart.products.filter((item: any) => item.product).forEach((item: any) => {
+                const originalPrice = Number(item.product?.price) || 0;
+                const totalQty = item.quantity || 1;
+                totalMRP += (originalPrice * totalQty);
+            });
 
-            if (qtyInCombo > 0) {
-                const share = comboDistributions[pIdString] || 0;
-                productTotalDiscount += share;
+            const multiAllocationsByProduct: Record<string, Array<any>> = {};
+            let totalMultiComboDiscount = 0;
 
-                // Push combo portion to finalProducts
-                finalProducts.push({
-                    product: p,
-                    quantity: qtyInCombo,
-                    isComboItem: true,
-                    finalUnitPrice: originalPrice,
-                    appliedProductOffer: null
+            multiComboResult.allocations.forEach((alloc: any) => {
+                const comboOffer = activeComboOffers.find((c: any) => c._id.toString() === alloc.comboOfferId);
+                if (!comboOffer) return;
+
+                appliedComboOffersList.push({
+                    offerId: comboOffer._id,
+                    offerName: comboOffer.offerName,
+                    applications: alloc.applications,
+                    discountAmount: alloc.totalDiscount
                 });
+                
+                totalMultiComboDiscount += alloc.totalDiscount;
+
+                let remainingComboDiscount = alloc.totalDiscount;
+                const itemsToDistribute: any[] = [];
+                let actualUsedMRPTotal = 0;
+
+                comboOffer.products.forEach((cp: any) => {
+                    const pIdString = cp.productId?._id?.toString() || cp.productId?.toString();
+                    if (!pIdString) return;
+                    
+                    const usedQty = cp.requiredQuantity * alloc.applications;
+                    if (usedQty > 0) {
+                        const cartItem = cart.products.find((i: any) => i.product?._id?.toString() === pIdString);
+                        const price = Number(cartItem?.product?.price) || 0;
+                        const usedMRP = Math.round((price * usedQty) * 100) / 100;
+                        actualUsedMRPTotal += usedMRP;
+                        itemsToDistribute.push({ pId: pIdString, usedMRP, usedQty, cp });
+                    }
+                });
+
+                itemsToDistribute.forEach((item, idx) => {
+                    let share = 0;
+                    if (idx === itemsToDistribute.length - 1) {
+                        share = Math.round(remainingComboDiscount * 100) / 100;
+                    } else {
+                        share = Math.round(((item.usedMRP / actualUsedMRPTotal) * alloc.totalDiscount) * 100) / 100;
+                        remainingComboDiscount = Math.round((remainingComboDiscount - share) * 100) / 100;
+                    }
+
+                    if (!multiAllocationsByProduct[item.pId]) {
+                        multiAllocationsByProduct[item.pId] = [];
+                    }
+                    multiAllocationsByProduct[item.pId].push({
+                        comboOfferId: comboOffer._id,
+                        comboOfferName: comboOffer.offerName,
+                        quantity: item.usedQty,
+                        discountAmount: share
+                    });
+                    
+                    comboDistributions[item.pId] = (comboDistributions[item.pId] || 0) + share;
+                });
+            });
+
+            if (appliedComboOffersList.length > 0) {
+                const sorted = [...appliedComboOffersList].sort((a, b) => b.discountAmount - a.discountAmount);
+                const primary = sorted[0];
+                bestCombo = activeComboOffers.find((c: any) => c._id.toString() === primary.offerId.toString());
+                bestComboDiscount = totalMultiComboDiscount;
+                hasComboOffer = true;
+                appliedComboOfferId = bestCombo._id;
+                appliedComboOfferName = bestCombo.offerName;
             }
 
-            if (qtyEligibleForIndividualOffer > 0) {
-                let bestProductOffer: any = null;
-                let bestCategoryOffer: any = null;
+            cart.products.filter((item: any) => item.product).forEach((item: any) => {
+                const p = item.product as any;
+                const originalPrice = Number(p?.price) || 0;
+                const totalQty = item.quantity || 1;
+                const pIdString = p?._id?.toString();
+
+                let qtyInCombo = 0;
+                const allocs = multiAllocationsByProduct[pIdString] || [];
                 
-                if (!comboProductIds.has(pIdString)) {
-                    const applicableOffers = activeOffers.filter(offer =>
+                allocs.forEach((alloc: any) => {
+                    qtyInCombo += alloc.quantity;
+                    grandTotalDiscount += alloc.discountAmount;
+
+                    finalProducts.push({
+                        product: p,
+                        quantity: alloc.quantity,
+                        isComboItem: true,
+                        finalUnitPrice: originalPrice,
+                        appliedProductOffer: null,
+                        comboAllocations: [alloc]
+                    });
+                });
+
+                const qtyEligibleForIndividualOffer = totalQty - qtyInCombo;
+
+                if (qtyEligibleForIndividualOffer > 0) {
+                    let bestProductOffer: any = null;
+                    let bestCategoryOffer: any = null;
+                    
+                    const applicableOffers = activeOffers.filter((offer: any) =>
                         (offer.offerFor === 'product' && offer.productId?.toString() === p._id?.toString()) ||
                         (offer.offerFor === 'category' && offer.categoryId?.toString() === p.categoryId?.toString())
                     );
 
-                    applicableOffers.forEach(offer => {
+                    applicableOffers.forEach((offer: any) => {
                         let discountAmt = 0;
                         if (offer.discountType === 'percentage') {
                             discountAmt = (originalPrice * (offer.discountValue || 0)) / 100;
@@ -233,57 +204,275 @@ export class SharedPricingService {
                             }
                         }
                     });
+
+                    let unitDiscount = 0;
+                    let appliedOfferMeta = null;
+
+                    if (bestProductOffer) {
+                        unitDiscount = Math.round(bestProductOffer.amt);
+                        const amt = unitDiscount * qtyEligibleForIndividualOffer;
+                        grandTotalDiscount += amt;
+                        hasProductOfferFlag = true;
+
+                        appliedOfferMeta = {
+                            offerId: bestProductOffer.offer._id,
+                            offerName: bestProductOffer.offer.offerName,
+                            discountType: bestProductOffer.offer.discountType,
+                            discountValue: bestProductOffer.offer.discountValue,
+                            finalUnitPrice: Math.max(0, originalPrice - unitDiscount)
+                        };
+                    } else if (bestCategoryOffer) {
+                        unitDiscount = Math.round(bestCategoryOffer.amt);
+                        const amt = unitDiscount * qtyEligibleForIndividualOffer;
+                        grandTotalDiscount += amt;
+                        hasProductOfferFlag = true;
+
+                        appliedOfferMeta = {
+                            offerId: bestCategoryOffer.offer._id,
+                            offerName: bestCategoryOffer.offer.offerName,
+                            discountType: bestCategoryOffer.offer.discountType,
+                            discountValue: bestCategoryOffer.offer.discountValue,
+                            finalUnitPrice: Math.max(0, originalPrice - unitDiscount)
+                        };
+                    }
+
+                    finalProducts.push({
+                        product: p,
+                        quantity: qtyEligibleForIndividualOffer,
+                        isComboItem: false,
+                        finalUnitPrice: Math.max(0, originalPrice - unitDiscount),
+                        appliedProductOffer: appliedOfferMeta,
+                        comboAllocations: []
+                    });
+                }
+            });
+
+        } else {
+            // LEGACY LOGIC
+            for (const combo of activeComboOffers) {
+                let isComboMet = true;
+                let comboSetMRP = 0;
+
+                if (!combo.products || !Array.isArray(combo.products)) continue;
+
+                const requirements: Record<string, number> = {};
+                for (const cp of combo.products) {
+                    const prodDoc: any = cp.productId;
+                    const pId = prodDoc?._id?.toString() || cp.productId?.toString();
+                    if (!pId) continue;
+                    requirements[pId] = (requirements[pId] || 0) + cp.requiredQuantity;
+                    
+                    const price = Number(prodDoc?.price) || 0;
+                    comboSetMRP += price * cp.requiredQuantity;
                 }
 
-                let unitDiscount = 0;
-                let appliedOfferMeta = null;
+                const requiredPIds = Object.keys(requirements);
+                if (requiredPIds.length === 0) continue;
 
-                if (bestProductOffer) {
-                    unitDiscount = Math.round(bestProductOffer.amt);
-                    const amt = unitDiscount * qtyEligibleForIndividualOffer;
-                    productTotalDiscount += amt;
-                    hasProductOfferFlag = true;
-
-                    appliedOfferMeta = {
-                        offerId: bestProductOffer.offer._id,
-                        offerName: bestProductOffer.offer.offerName,
-                        discountType: bestProductOffer.offer.discountType,
-                        discountValue: bestProductOffer.offer.discountValue,
-                        finalUnitPrice: Math.max(0, originalPrice - unitDiscount)
-                    };
-                } else if (bestCategoryOffer) {
-                    unitDiscount = Math.round(bestCategoryOffer.amt);
-                    const amt = unitDiscount * qtyEligibleForIndividualOffer;
-                    productTotalDiscount += amt;
-                    hasProductOfferFlag = true;
-
-                    appliedOfferMeta = {
-                        offerId: bestCategoryOffer.offer._id,
-                        offerName: bestCategoryOffer.offer.offerName,
-                        discountType: bestCategoryOffer.offer.discountType,
-                        discountValue: bestCategoryOffer.offer.discountValue,
-                        finalUnitPrice: Math.max(0, originalPrice - unitDiscount)
-                    };
+                for (const pId of requiredPIds) {
+                    const cartItem = cart.products.find((cp: any) => cp.product?._id?.toString() === pId);
+                    if (!cartItem || cartItem.quantity < requirements[pId]) {
+                        isComboMet = false;
+                        break;
+                    }
                 }
 
-                // Push non-combo portion
-                finalProducts.push({
-                    product: p,
-                    quantity: qtyEligibleForIndividualOffer,
-                    isComboItem: false,
-                    finalUnitPrice: Math.max(0, originalPrice - unitDiscount),
-                    appliedProductOffer: appliedOfferMeta
+                if (isComboMet) {
+                    let possibleApps = Infinity;
+                    for (const pId of requiredPIds) {
+                        const cartItem = cart.products.find((i: any) => i.product?._id?.toString() === pId);
+                        if (!cartItem) continue;
+                        const appsForThisProd = Math.floor(cartItem.quantity / requirements[pId]);
+                        possibleApps = Math.min(possibleApps, appsForThisProd);
+                    }
+
+                    if (possibleApps > 0 && possibleApps !== Infinity) {
+                        let combosToApply = possibleApps;
+                        if (combo.maxUsagePerOrder && combo.maxUsagePerOrder > 0) {
+                            combosToApply = Math.min(possibleApps, combo.maxUsagePerOrder);
+                        }
+
+                        let discount = 0;
+                        const comboBaseAmount = Math.round((comboSetMRP * combosToApply) * 100) / 100;
+
+                        if (combo.discountType === 'percentage') {
+                            discount = Math.round(((comboBaseAmount * (combo.discountValue || 0)) / 100) * 100) / 100;
+                        } else {
+                            discount = Math.round(((combo.discountValue || 0) * combosToApply) * 100) / 100;
+                        }
+
+                        if (discount > bestComboDiscount) {
+                            bestComboDiscount = discount;
+                            bestCombo = combo;
+                            applications = combosToApply;
+                            hasComboOffer = true;
+                        }
+                    }
+                }
+            }
+
+            if (bestCombo) {
+                appliedComboOfferId = bestCombo._id;
+                appliedComboOfferName = bestCombo.offerName;
+            }
+
+            if (bestCombo && applications > 0) {
+                let remainingComboDiscount = bestComboDiscount;
+                const itemsToDistribute: any[] = [];
+                let actualUsedMRPTotal = 0;
+
+                cart.products.forEach((item: any) => {
+                    const pIdString = item.product?._id?.toString();
+                    if (!pIdString) return;
+
+                    const reqPerSet = bestCombo.products.reduce((acc: number, cp: any) => {
+                        const cpId = cp.productId?._id?.toString() || cp.productId?.toString();
+                        return cpId === pIdString ? acc + cp.requiredQuantity : acc;
+                    }, 0);
+
+                    if (reqPerSet > 0) {
+                        const usedQty = reqPerSet * applications;
+                        const price = Number(item.product?.price) || 0;
+                        const usedMRP = Math.round((price * usedQty) * 100) / 100;
+                        actualUsedMRPTotal += usedMRP;
+                        itemsToDistribute.push({ pId: pIdString, usedMRP });
+                    }
+                });
+
+                itemsToDistribute.forEach((item, idx) => {
+                    if (idx === itemsToDistribute.length - 1) {
+                        comboDistributions[item.pId] = Math.round((remainingComboDiscount) * 100) / 100;
+                    } else {
+                        const share = Math.round(((item.usedMRP / actualUsedMRPTotal) * bestComboDiscount) * 100) / 100;
+                        comboDistributions[item.pId] = share;
+                        remainingComboDiscount = Math.round((remainingComboDiscount - share) * 100) / 100;
+                    }
                 });
             }
 
-            grandTotalDiscount += productTotalDiscount;
-        });
+            const comboProductIds = new Set(
+                bestCombo?.products.map((p: any) =>
+                    p.productId?._id?.toString() || p.productId?.toString()
+                )
+            );
+
+            cart.products.filter((item: any) => item.product).forEach((item: any) => {
+                const p = item.product as any;
+                const originalPrice = Number(p?.price) || 0;
+                const totalQty = item.quantity || 1;
+                totalMRP += (originalPrice * totalQty);
+                const pIdString = p?._id?.toString();
+
+                let qtyInCombo = 0;
+                if (bestCombo) {
+                    const reqPerSet = bestCombo.products.reduce((acc: number, cp: any) => {
+                        const cpId = cp.productId?._id?.toString() || cp.productId?.toString();
+                        return cpId === pIdString ? acc + cp.requiredQuantity : acc;
+                    }, 0);
+                    qtyInCombo = reqPerSet * applications;
+                }
+
+                const qtyEligibleForIndividualOffer = totalQty - qtyInCombo;
+                let productTotalDiscount = 0;
+
+                if (qtyInCombo > 0) {
+                    const share = comboDistributions[pIdString] || 0;
+                    productTotalDiscount += share;
+
+                    finalProducts.push({
+                        product: p,
+                        quantity: qtyInCombo,
+                        isComboItem: true,
+                        finalUnitPrice: originalPrice,
+                        appliedProductOffer: null,
+                        comboAllocations: [
+                            {
+                                comboOfferId: bestCombo._id,
+                                comboOfferName: bestCombo.offerName,
+                                quantity: qtyInCombo,
+                                discountAmount: share
+                            }
+                        ]
+                    });
+                }
+
+                if (qtyEligibleForIndividualOffer > 0) {
+                    let bestProductOffer: any = null;
+                    let bestCategoryOffer: any = null;
+                    
+                    if (!comboProductIds.has(pIdString)) {
+                        const applicableOffers = activeOffers.filter((offer: any) =>
+                            (offer.offerFor === 'product' && offer.productId?.toString() === p._id?.toString()) ||
+                            (offer.offerFor === 'category' && offer.categoryId?.toString() === p.categoryId?.toString())
+                        );
+
+                        applicableOffers.forEach((offer: any) => {
+                            let discountAmt = 0;
+                            if (offer.discountType === 'percentage') {
+                                discountAmt = (originalPrice * (offer.discountValue || 0)) / 100;
+                            } else {
+                                discountAmt = offer.discountValue || 0;
+                            }
+
+                            if (offer.offerFor === 'product') {
+                                if (!bestProductOffer || discountAmt > (bestProductOffer.amt || 0)) {
+                                    bestProductOffer = { offer, amt: discountAmt };
+                                }
+                            } else {
+                                if (!bestCategoryOffer || discountAmt > (bestCategoryOffer.amt || 0)) {
+                                    bestCategoryOffer = { offer, amt: discountAmt };
+                                }
+                            }
+                        });
+                    }
+
+                    let unitDiscount = 0;
+                    let appliedOfferMeta = null;
+
+                    if (bestProductOffer) {
+                        unitDiscount = Math.round(bestProductOffer.amt);
+                        const amt = unitDiscount * qtyEligibleForIndividualOffer;
+                        productTotalDiscount += amt;
+                        hasProductOfferFlag = true;
+
+                        appliedOfferMeta = {
+                            offerId: bestProductOffer.offer._id,
+                            offerName: bestProductOffer.offer.offerName,
+                            discountType: bestProductOffer.offer.discountType,
+                            discountValue: bestProductOffer.offer.discountValue,
+                            finalUnitPrice: Math.max(0, originalPrice - unitDiscount)
+                        };
+                    } else if (bestCategoryOffer) {
+                        unitDiscount = Math.round(bestCategoryOffer.amt);
+                        const amt = unitDiscount * qtyEligibleForIndividualOffer;
+                        productTotalDiscount += amt;
+                        hasProductOfferFlag = true;
+
+                        appliedOfferMeta = {
+                            offerId: bestCategoryOffer.offer._id,
+                            offerName: bestCategoryOffer.offer.offerName,
+                            discountType: bestCategoryOffer.offer.discountType,
+                            discountValue: bestCategoryOffer.offer.discountValue,
+                            finalUnitPrice: Math.max(0, originalPrice - unitDiscount)
+                        };
+                    }
+
+                    finalProducts.push({
+                        product: p,
+                        quantity: qtyEligibleForIndividualOffer,
+                        isComboItem: false,
+                        finalUnitPrice: Math.max(0, originalPrice - unitDiscount),
+                        appliedProductOffer: appliedOfferMeta,
+                        comboAllocations: []
+                    });
+                }
+
+                grandTotalDiscount += productTotalDiscount;
+            });
+        }
 
         // Suppress coupon errors if not passing a code or if just fetching cart totals.
-        // We only throw if an invalid coupon is supplied AND there is no other active offer blocking it.
         if ((hasComboOffer || hasProductOfferFlag) && (couponCode || referralCode)) {
-            // Throw if user explicitly tried to use it, but if it's just a passive cart fetch we'll clear it instead of throwing
-            // Wait, we throw so the frontend clears the coupon
             throw new AppError("Coupon or referral cannot be applied when an active offer exists.", STATUS_CODES.BAD_REQUEST);
         }
 
@@ -339,7 +528,6 @@ export class SharedPricingService {
                 let isWheelCoupon = false;
                 let userCouponId = null;
 
-                // FIRST: Check if this is a Spin Wheel reward
                 if (couponCode.toUpperCase().startsWith('SPIN')) {
                     const anySpinHistory = await SpinHistoryModel.findOne({ 
                         couponCode: { $regex: new RegExp(`^${couponCode}$`, 'i') } 
@@ -374,7 +562,6 @@ export class SharedPricingService {
                     });
                 }
 
-                // Check if the customer has already successfully used this normal coupon
                 if (!isWheelCoupon && coupon && userId) {
                     const previousUsage = await OrderModel.findOne({
                         userId: userId,
@@ -462,9 +649,8 @@ export class SharedPricingService {
 
         if (appliedInfluencer && isInfluencerEnabled && isInfluencerDiscountEligible && !appliedCouponId && !appliedReferralCode) {
             
-            // First pass: Check if ANY product has an individual influencer discount
             let hasProductSpecificDiscount = false;
-            finalProducts.forEach(item => {
+            finalProducts.forEach((item: any) => {
                 const prodInfluencerDiscount = Number(item.product?.influencerDiscount) || 0;
                 if (prodInfluencerDiscount > 0) {
                     hasProductSpecificDiscount = true;
@@ -472,8 +658,7 @@ export class SharedPricingService {
             });
 
             if (hasProductSpecificDiscount) {
-                // PRODUCT-SPECIFIC MODE: Common discount = 0
-                finalProducts.forEach(item => {
+                finalProducts.forEach((item: any) => {
                     const prodInfluencerDiscount = Number(item.product?.influencerDiscount) || 0;
                     const discountType = (item.product as any)?.influencerDiscountType?.toLowerCase() || 'fixed';
                     
@@ -494,8 +679,7 @@ export class SharedPricingService {
                     }
                 });
             } else {
-                // COMMON MODE: Apply global percentage to eligible total
-                finalProducts.forEach(item => {
+                finalProducts.forEach((item: any) => {
                     if (item.finalUnitPrice > 0) {
                         const unitDisc = (item.finalUnitPrice * influencerDiscountPercent) / 100;
                         const itemDiscTotal = unitDisc * item.quantity;
@@ -512,7 +696,7 @@ export class SharedPricingService {
                 finalDiscountAmount += influencerDiscountAmount;
             }
         } else {
-            finalProducts.forEach(item => {
+            finalProducts.forEach((item: any) => {
                 item.influencerDiscountAmount = 0;
             });
         }
@@ -560,7 +744,6 @@ export class SharedPricingService {
                 const maxRedeemable = Math.min(availablePoints, settings.maxRedeemablePerOrder);
                 const discountValue = maxRedeemable * settings.pointValueInRupees;
                 
-                // Ensure we don't discount more than the total MRP (excluding delivery charge)
                 const maxAllowedDiscount = totalMRP - finalDiscountAmount;
                 if (discountValue > maxAllowedDiscount) {
                     naturePointsDiscount = maxAllowedDiscount;
@@ -615,7 +798,6 @@ export class SharedPricingService {
                 referral: !!appliedReferralCode,
                 influencer: influencerDiscountAmount > 0 || !!appliedInfluencer
             },
-            // Requested explicit fields in the root
             influencerDiscount: influencerDiscountAmount,
             influencerApplied: appliedInfluencer ? {
                 _id: appliedInfluencer._id,
@@ -635,31 +817,36 @@ export class SharedPricingService {
             subtotal: totalMRP
         };
 
-        // Added Temporary Logs
-        console.log(`----------------------------------`);
-        console.log(`Influencer Cookie : ${influencerRef || 'None'}`);
-        console.log(`Influencer Code : ${influencerRef || 'None'}`);
-        console.log(`Influencer Found : ${!!(influencerRef && isInfluencerEnabled)}`);
-        console.log(`Cart Products : ${cart.products.length}`);
-        console.log(`Combo Applied : ${hasComboOffer}`);
-        console.log(`Product Offer Applied : ${hasProductOfferFlag}`);
-        console.log(`Category Offer Applied : ${hasProductOfferFlag}`); // Treating product and category offer as same boolean here based on our implementation
-        console.log(`Coupon Applied : ${!!appliedCouponId}`);
-        console.log(`Referral Applied : ${!!appliedReferralCode}`);
-        console.log(`Offer Exists : ${hasComboOffer || hasProductOfferFlag || !!appliedCouponId || !!appliedReferralCode}`);
-        console.log(`Entered Influencer Block : ${influencerDiscountAmount > 0}`);
-        console.log(`Influencer % : ${influencerDiscountPercent}`);
-        console.log(`Influencer Discount : ${influencerDiscountAmount}`);
-        console.log(`Final Total : ${totalAmount}`);
-        console.log(`----------------------------------`);
-
-        if (bestCombo) {
-            result.appliedComboOffer = {
-                _id: bestCombo._id,
-                offerName: bestCombo.offerName,
-                discountValue: bestComboDiscount,
-                products: bestCombo.products
-            };
+        if (isMultiMode) {
+            result.appliedComboOffers = appliedComboOffersList;
+            if (bestCombo) {
+                result.appliedComboOffer = {
+                    _id: bestCombo._id,
+                    offerName: bestCombo.offerName,
+                    discountValue: bestComboDiscount,
+                    products: bestCombo.products
+                };
+            } else {
+                result.appliedComboOffer = null;
+            }
+        } else {
+            result.appliedComboOffers = [];
+            if (bestCombo) {
+                result.appliedComboOffer = {
+                    _id: bestCombo._id,
+                    offerName: bestCombo.offerName,
+                    discountValue: bestComboDiscount,
+                    products: bestCombo.products
+                };
+                result.appliedComboOffers = [
+                    {
+                        offerId: bestCombo._id,
+                        offerName: bestCombo.offerName,
+                        applications: applications,
+                        discountAmount: bestComboDiscount
+                    }
+                ];
+            }
         }
 
         return result;

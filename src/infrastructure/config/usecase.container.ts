@@ -167,9 +167,10 @@ container.registerSingleton<DeleteOfferUseCase>('IDeleteOfferUseCase', DeleteOff
 container.registerSingleton<ToggleOfferStatusUseCase>('IToggleOfferStatusUseCase', ToggleOfferStatusUseCase);
 
 // Admin ComboOffer UseCases
-import { AddComboOfferUseCase, GetAllComboOffersUseCase, UpdateComboOfferUseCase, DeleteComboOfferUseCase, ToggleComboOfferStatusUseCase } from '../../application/usecases/admin/AdminComboOfferUseCases';
+import { AddComboOfferUseCase, GetAllComboOffersUseCase, GetComboOfferByIdUseCase, UpdateComboOfferUseCase, DeleteComboOfferUseCase, ToggleComboOfferStatusUseCase } from '../../application/usecases/admin/AdminComboOfferUseCases';
 container.registerSingleton<AddComboOfferUseCase>('IAddComboOfferUseCase', AddComboOfferUseCase);
 container.registerSingleton<GetAllComboOffersUseCase>('IGetAllComboOffersUseCase', GetAllComboOffersUseCase);
+container.registerSingleton<GetComboOfferByIdUseCase>('IGetComboOfferByIdUseCase', GetComboOfferByIdUseCase);
 container.registerSingleton<UpdateComboOfferUseCase>('IUpdateComboOfferUseCase', UpdateComboOfferUseCase);
 container.registerSingleton<DeleteComboOfferUseCase>('IDeleteComboOfferUseCase', DeleteComboOfferUseCase);
 container.registerSingleton<ToggleComboOfferStatusUseCase>('IToggleComboOfferStatusUseCase', ToggleComboOfferStatusUseCase);

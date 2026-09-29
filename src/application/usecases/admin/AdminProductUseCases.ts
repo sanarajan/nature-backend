@@ -38,7 +38,10 @@ export class AddProductUseCase {
         const {
             productName, categoryId, subcategoryId, unitId, quantity, stock, price,
             description, specifications, images,
-            featured, isPopular, isTrending, isBestSeller
+            featured, isPopular, isTrending, isBestSeller,
+            shortDescription, keyBenefits, keyIngredients, howToUse, otherIngredients, faqs, metaTitle, metaDescription, tags,
+            suitableFor, safetyInformation, patchTestGuidance, storageInstructions, disclaimer, internalPublishingNote, slug, imageAltText,
+            labelControl, specialPublishingClaimsNote
         } = data;
 
         if (!productName || !categoryId || !unitId || quantity === undefined || stock === undefined || price === undefined) {
@@ -116,7 +119,26 @@ export class AddProductUseCase {
             isPopular: isPopular === true || isPopular === 'true',
             isTrending: isTrending === true || isTrending === 'true',
             isBestSeller: isBestSeller === true || isBestSeller === 'true',
-            isActive: true
+            isActive: true,
+            shortDescription,
+            keyBenefits,
+            keyIngredients,
+            howToUse,
+            otherIngredients,
+            faqs,
+            metaTitle,
+            metaDescription,
+            tags,
+            suitableFor,
+            safetyInformation,
+            patchTestGuidance,
+            storageInstructions,
+            disclaimer,
+            internalPublishingNote,
+            slug,
+            imageAltText,
+            labelControl,
+            specialPublishingClaimsNote
         };
 
         try {
@@ -167,7 +189,10 @@ export class UpdateProductUseCase {
         const {
             productName, categoryId, subcategoryId, unitId, quantity, stock, price,
             description, specifications, images,
-            featured, isPopular, isTrending, isBestSeller
+            featured, isPopular, isTrending, isBestSeller,
+            shortDescription, keyBenefits, keyIngredients, howToUse, otherIngredients, faqs, metaTitle, metaDescription, tags,
+            suitableFor, safetyInformation, patchTestGuidance, storageInstructions, disclaimer, internalPublishingNote, slug, imageAltText,
+            labelControl, specialPublishingClaimsNote
         } = data;
 
         if (!productName || !categoryId || !unitId || quantity === undefined || stock === undefined || price === undefined) {
@@ -205,7 +230,26 @@ export class UpdateProductUseCase {
             featured: featured === true || featured === 'true',
             isPopular: isPopular === true || isPopular === 'true',
             isTrending: isTrending === true || isTrending === 'true',
-            isBestSeller: isBestSeller === true || isBestSeller === 'true'
+            isBestSeller: isBestSeller === true || isBestSeller === 'true',
+            shortDescription,
+            keyBenefits,
+            keyIngredients,
+            howToUse,
+            otherIngredients,
+            faqs,
+            metaTitle,
+            metaDescription,
+            tags,
+            suitableFor,
+            safetyInformation,
+            patchTestGuidance,
+            storageInstructions,
+            disclaimer,
+            internalPublishingNote,
+            slug,
+            imageAltText,
+            labelControl,
+            specialPublishingClaimsNote
         };
 
         if (images && Array.isArray(images)) {

@@ -10,6 +10,7 @@ router.get('/featured', (req, res, next) => controller.getFeaturedProducts(req, 
 router.get('/popular', (req, res, next) => controller.getPopularProducts(req, res, next));
 router.get('/combo-offers', (req, res, next) => controller.getComboOffers(req, res, next));
 router.get('/offer-products', (req, res, next) => controller.getOfferProducts(req, res, next));
+router.get('/combo-offers/:slug', (req, res, next) => controller.getComboOfferByIdOrSlug(req, res, next));
 router.get('/:id', (req, res, next) => controller.getProductById(req, res, next));
 
 export default router;

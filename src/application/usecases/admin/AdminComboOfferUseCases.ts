@@ -89,17 +89,49 @@ export class AddComboOfferUseCase {
 
         const newComboOfferData = {
             offerName: data.offerName,
-            products: cleanedItems.map(item => ({
-                productId: new mongoose.Types.ObjectId(item.id!),
-                requiredQuantity: item.requiredQuantity
-            })),
+            products: cleanedItems.map(item => {
+                const originalItem = data.products.find((p: any) => this.extractId(p) === item.id);
+                return {
+                    productId: new mongoose.Types.ObjectId(item.id!),
+                    requiredQuantity: item.requiredQuantity,
+                    comboRole: originalItem?.comboRole,
+                    comboRoleDescription: originalItem?.comboRoleDescription
+                };
+            }),
             discountType: data.discountType || 'amount',
             discountValue: data.discountValue,
             maxUsagePerOrder: data.maxUsagePerOrder || 0,
             startDate: data.startDate,
             endDate: data.endDate,
             status: data.status !== undefined ? data.status : true,
-            imageUrl: finalImageUrl
+            imageUrl: finalImageUrl,
+            
+            subtitle: data.subtitle,
+            tagline: data.tagline,
+            shortDescription: data.shortDescription,
+            overviewTitle: data.overviewTitle,
+            overviewDescription: data.overviewDescription,
+            routineLabel: data.routineLabel,
+            targetConcerns: data.targetConcerns,
+            whySpecial: data.whySpecial,
+            howToUseSteps: data.howToUseSteps,
+            recommendedRoutine: data.recommendedRoutine,
+            whoMayBenefit: data.whoMayBenefit,
+            resultsAndExpectations: data.resultsAndExpectations,
+            safetyInformation: data.safetyInformation,
+            patchTestGuidance: data.patchTestGuidance,
+            storageInstructions: data.storageInstructions,
+            disclaimer: data.disclaimer,
+            faqs: data.faqs,
+            
+            seoTitle: data.seoTitle,
+            metaDescription: data.metaDescription,
+            slug: data.slug,
+            imageAltText: data.imageAltText,
+            productBadge: data.productBadge,
+            promotionalBadge: data.promotionalBadge,
+            ctaLabel: data.ctaLabel,
+            supportingCtaLabel: data.supportingCtaLabel
         };
 
         return await this.comboOfferRepository.createComboOffer(newComboOfferData);
@@ -114,6 +146,21 @@ export class GetAllComboOffersUseCase {
 
     async execute() {
         return await this.comboOfferRepository.findAllComboOffers();
+    }
+}
+
+@injectable()
+export class GetComboOfferByIdUseCase {
+    constructor(
+        @inject('IComboOfferRepository') private comboOfferRepository: IComboOfferRepository
+    ) {}
+
+    async execute(id: string) {
+        const offer = await this.comboOfferRepository.findComboOfferById(id);
+        if (!offer) {
+            throw new AppError('Combo Offer not found', STATUS_CODES.NOT_FOUND);
+        }
+        return offer;
     }
 }
 
@@ -176,10 +223,15 @@ export class UpdateComboOfferUseCase {
         }
 
         if (data.products && cleanedItems.length > 0) {
-            updateData.products = cleanedItems.map(item => ({
-                productId: new mongoose.Types.ObjectId(item.id!),
-                requiredQuantity: item.requiredQuantity
-            }));
+            updateData.products = cleanedItems.map(item => {
+                const originalItem = data.products.find((p: any) => this.extractId(p) === item.id);
+                return {
+                    productId: new mongoose.Types.ObjectId(item.id!),
+                    requiredQuantity: item.requiredQuantity,
+                    comboRole: originalItem?.comboRole,
+                    comboRoleDescription: originalItem?.comboRoleDescription
+                };
+            });
         }
 
         const updatedOffer = await this.comboOfferRepository.updateComboOffer(id, updateData);

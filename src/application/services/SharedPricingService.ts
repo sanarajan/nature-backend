@@ -471,11 +471,6 @@ export class SharedPricingService {
             });
         }
 
-        // Suppress coupon errors if not passing a code or if just fetching cart totals.
-        if ((hasComboOffer || hasProductOfferFlag) && (couponCode || referralCode)) {
-            throw new AppError("Coupon or referral cannot be applied when an active offer exists.", STATUS_CODES.BAD_REQUEST);
-        }
-
         let finalDiscountAmount = grandTotalDiscount;
         let appliedReferralCode = '';
         let appliedCouponId: any = null;
@@ -484,12 +479,13 @@ export class SharedPricingService {
         let activeInfluencerCode: string | null = null;
         const influencerSettings = await InfluencerSettingModel.findOne({ isActive: true });
         const isInfluencerEnabled = influencerSettings ? influencerSettings.influencerEnabled : true;
+        
+        let manualInfluencerCodeFound = false;
 
         if (isInfluencerEnabled) {
-            const codeToCheck = (couponCode || influencerRef || '').trim();
-            if (codeToCheck) {
+            if (influencerRef) {
                 const inf = await UserModel.findOne({
-                    influencerCode: { $regex: new RegExp(`^${codeToCheck}$`, 'i') },
+                    influencerCode: { $regex: new RegExp(`^${influencerRef.trim()}$`, 'i') },
                     influencerStatus: { $in: ['Active', 'ACTIVE'] },
                     isInfluencer: true,
                     influencerRequestStatus: 'APPROVED'
@@ -499,19 +495,31 @@ export class SharedPricingService {
                     activeInfluencerCode = inf.influencerCode || null;
                 }
             }
-            if (!appliedInfluencer && influencerRef && (!couponCode || couponCode !== influencerRef)) {
-                const infCookie = await UserModel.findOne({
-                    influencerCode: { $regex: new RegExp(`^${influencerRef.trim()}$`, 'i') },
+            
+            if (couponCode) {
+                const manualInf = await UserModel.findOne({
+                    influencerCode: { $regex: new RegExp(`^${couponCode.trim()}$`, 'i') },
                     influencerStatus: { $in: ['Active', 'ACTIVE'] },
                     isInfluencer: true,
                     influencerRequestStatus: 'APPROVED'
                 });
-                if (infCookie && (!userId || infCookie._id.toString() !== userId)) {
-                    appliedInfluencer = infCookie;
-                    activeInfluencerCode = infCookie.influencerCode || null;
+                if (manualInf && (!userId || manualInf._id.toString() !== userId)) {
+                    appliedInfluencer = manualInf;
+                    activeInfluencerCode = manualInf.influencerCode || null;
+                    manualInfluencerCodeFound = true;
                 }
             }
         }
+
+        // Suppress coupon errors if not passing a code or if just fetching cart totals.
+        // A manual influencer code is NOT a normal coupon, so do not block it here.
+        const isCouponCodeRealCoupon = couponCode && !manualInfluencerCodeFound;
+        
+        if ((hasComboOffer || hasProductOfferFlag) && (isCouponCodeRealCoupon || referralCode)) {
+            throw new AppError("Coupon or referral cannot be applied when an active offer exists.", STATUS_CODES.BAD_REQUEST);
+        }
+        
+
 
         if (!hasComboOffer && !hasProductOfferFlag) {
             if (referralCode && userId) {

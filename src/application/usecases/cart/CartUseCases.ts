@@ -24,6 +24,12 @@ export class GetCartUseCase implements IGetCartUseCase {
         let cart = await this.cartRepository.findByUserId(userId);
         if (!cart) {
             cart = await this.cartRepository.createCart(userId);
+        } else {
+            const initialLength = cart.products.length;
+            cart.products = cart.products.filter((item: any) => item.product != null);
+            if (cart.products.length !== initialLength) {
+                await this.cartRepository.save(cart);
+            }
         }
         return await this.sharedPricingService.calculate(cart, { userId, influencerRef });
     }
@@ -45,10 +51,25 @@ export class ToggleCartItemUseCase implements IToggleCartItemUseCase {
         }
 
         const productIndex = cart.products.findIndex((p: any) => p.product._id.toString() === productId);
+        const product = await ProductModel.findById(productId);
+        
+        if (!product || product.isActive === false) {
+            throw new ValidationError('This product is currently unavailable.');
+        }
+        if (product.stock <= 0) {
+            throw new ValidationError('This product is currently out of stock.');
+        }
 
         if (productIndex > -1) {
-            cart.products.splice(productIndex, 1);
+            const newQty = cart.products[productIndex].quantity + Number(quantity);
+            if (newQty > product.stock) {
+                throw new ValidationError(`Only ${product.stock} item(s) are currently available.`);
+            }
+            cart.products[productIndex].quantity = newQty;
         } else {
+            if (Number(quantity) > product.stock) {
+                throw new ValidationError(`Only ${product.stock} item(s) are currently available.`);
+            }
             cart.products.push({ product: productId, quantity: Number(quantity) });
         }
 
@@ -76,7 +97,24 @@ export class UpdateCartItemQuantityUseCase implements IUpdateCartItemQuantityUse
         const productIndex = cart.products.findIndex((p: any) => p.product._id.toString() === productId);
 
         if (productIndex > -1) {
-            cart.products[productIndex].quantity = Number(quantity);
+            const product = await ProductModel.findById(productId);
+            if (!product || product.isActive === false) {
+                throw new ValidationError('This product is currently unavailable.');
+            }
+            
+            const requestedQuantity = Number(quantity);
+            const currentQuantity = cart.products[productIndex].quantity;
+            
+            if (requestedQuantity > currentQuantity) {
+                if (product.stock <= 0) {
+                    throw new ValidationError('This product is currently out of stock.');
+                }
+                if (requestedQuantity > product.stock) {
+                    throw new ValidationError(`Only ${product.stock} item(s) are currently available.`);
+                }
+            }
+            
+            cart.products[productIndex].quantity = requestedQuantity;
             await this.cartRepository.save(cart);
             const populatedCart = await this.cartRepository.findByUserId(userId);
             return await this.sharedPricingService.calculate(populatedCart, { userId, influencerRef });
@@ -111,7 +149,7 @@ export class SyncOfflineCartUseCase implements ISyncOfflineCartUseCase {
         @inject('ISharedPricingService') private sharedPricingService: SharedPricingService
     ) {}
 
-    async execute(userId: string, cartItems: any[], influencerRef?: string): Promise<any> {
+    async execute(userId: string, cartItems: any[], influencerRef?: string, isAtomicCombo?: boolean): Promise<any> {
         if (!cartItems || !Array.isArray(cartItems)) throw new ValidationError('Invalid cart items format');
         
         let cart = await this.cartRepository.findByUserId(userId);
@@ -119,14 +157,47 @@ export class SyncOfflineCartUseCase implements ISyncOfflineCartUseCase {
             cart = await this.cartRepository.createCart(userId);
         }
 
+        if (isAtomicCombo) {
+            const aggregatedItems: { [key: string]: number } = {};
+            for (const item of cartItems) {
+                if (!item.product || !item.quantity) continue;
+                aggregatedItems[item.product] = (aggregatedItems[item.product] || 0) + Number(item.quantity);
+            }
+
+            for (const [productId, incomingQty] of Object.entries(aggregatedItems)) {
+                const product = await ProductModel.findById(productId);
+                if (!product || product.isActive === false) {
+                    throw new ValidationError('One or more products in this combo are currently unavailable.');
+                }
+                const existingItem = cart.products.find((p: any) => p.product._id.toString() === productId);
+                const currentQty = existingItem ? existingItem.quantity : 0;
+                
+                if (product.stock <= 0) {
+                    throw new ValidationError('One or more products in this combo are out of stock.');
+                }
+                if (currentQty + incomingQty > product.stock) {
+                    throw new ValidationError(`Insufficient stock for product in combo.`);
+                }
+            }
+        }
+
         for (const item of cartItems) {
             if (!item.product || !item.quantity) continue;
             
             const existingItem = cart.products.find((p: any) => p.product._id.toString() === item.product);
+            const product = await ProductModel.findById(item.product);
             if (existingItem) {
-                existingItem.quantity += Number(item.quantity);
+                if (product && product.isActive !== false) {
+                    const newQty = existingItem.quantity + Number(item.quantity);
+                    existingItem.quantity = Math.max(existingItem.quantity, Math.min(newQty, product.stock));
+                }
             } else {
-                cart.products.push({ product: item.product, quantity: Number(item.quantity) });
+                if (product && product.isActive !== false) {
+                    const incomingQty = Number(item.quantity);
+                    if (product.stock > 0) {
+                        cart.products.push({ product: item.product, quantity: Math.min(incomingQty, product.stock) });
+                    }
+                }
             }
         }
         await this.cartRepository.save(cart);

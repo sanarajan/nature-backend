@@ -27,6 +27,22 @@ export class CalculateCheckoutTotalsUseCase {
             throw new AppError('Cart is empty', STATUS_CODES.BAD_REQUEST);
         }
 
+        const hasInactiveProduct = cart.products.some((p: any) => p.product && p.product.isActive === false);
+        if (hasInactiveProduct) {
+            throw new AppError('One or more products in your cart are currently unavailable. Please remove them before checkout.', STATUS_CODES.BAD_REQUEST);
+        }
+
+        for (const item of cart.products) {
+            const product = item.product as any;
+            if (!product) continue;
+            if (product.stock <= 0) {
+                throw new AppError(`${product.productName} is currently out of stock.`, STATUS_CODES.BAD_REQUEST);
+            }
+            if (item.quantity > product.stock) {
+                throw new AppError(`Only ${product.stock} item(s) of ${product.productName} are currently available.`, STATUS_CODES.BAD_REQUEST);
+            }
+        }
+
         const calculated = await this.sharedPricingService.calculate(cart, {
             userId,
             influencerRef,

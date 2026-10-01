@@ -6,6 +6,11 @@ import { IUnitRepository } from '../../../domain/repositories/IUnitRepository';
 import { AppError } from '../../../shared/utils/AppError';
 import { STATUS_CODES } from '../../../shared/constants/statusCodes';
 import cloudinary from '../../../infrastructure/config/cloudinary';
+import { CartModel } from '../../../infrastructure/database/models/CartModel';
+import { WishlistModel } from '../../../infrastructure/database/models/WishlistModel';
+import { ComboOfferModel } from '../../../infrastructure/database/models/ComboOfferModel';
+import { OrderModel } from '../../../infrastructure/database/models/OrderModel';
+import { OfferModel } from '../../../infrastructure/database/models/OfferModel';
 
 @injectable()
 export class GetProductOptionsUseCase {
@@ -41,7 +46,7 @@ export class AddProductUseCase {
             featured, isPopular, isTrending, isBestSeller,
             shortDescription, keyBenefits, keyIngredients, howToUse, otherIngredients, faqs, metaTitle, metaDescription, tags,
             suitableFor, safetyInformation, patchTestGuidance, storageInstructions, disclaimer, internalPublishingNote, slug, imageAltText,
-            labelControl, specialPublishingClaimsNote
+            labelControl, specialPublishingClaimsNote, isActive
         } = data;
 
         if (!productName || !categoryId || !unitId || quantity === undefined || stock === undefined || price === undefined) {
@@ -119,7 +124,7 @@ export class AddProductUseCase {
             isPopular: isPopular === true || isPopular === 'true',
             isTrending: isTrending === true || isTrending === 'true',
             isBestSeller: isBestSeller === true || isBestSeller === 'true',
-            isActive: true,
+            isActive: isActive === undefined ? true : (isActive === true || isActive === 'true'),
             shortDescription,
             keyBenefits,
             keyIngredients,
@@ -192,7 +197,7 @@ export class UpdateProductUseCase {
             featured, isPopular, isTrending, isBestSeller,
             shortDescription, keyBenefits, keyIngredients, howToUse, otherIngredients, faqs, metaTitle, metaDescription, tags,
             suitableFor, safetyInformation, patchTestGuidance, storageInstructions, disclaimer, internalPublishingNote, slug, imageAltText,
-            labelControl, specialPublishingClaimsNote
+            labelControl, specialPublishingClaimsNote, isActive
         } = data;
 
         if (!productName || !categoryId || !unitId || quantity === undefined || stock === undefined || price === undefined) {
@@ -231,6 +236,7 @@ export class UpdateProductUseCase {
             isPopular: isPopular === true || isPopular === 'true',
             isTrending: isTrending === true || isTrending === 'true',
             isBestSeller: isBestSeller === true || isBestSeller === 'true',
+            isActive: isActive === undefined ? true : (isActive === true || isActive === 'true'),
             shortDescription,
             keyBenefits,
             keyIngredients,
@@ -282,6 +288,21 @@ export class DeleteProductUseCase {
     ) {}
 
     async execute(id: string) {
+        const isInCart = await CartModel.exists({ "products.product": id });
+        if (isInCart) throw new AppError('This product is currently in use and cannot be deleted. Mark it Inactive instead.', STATUS_CODES.CONFLICT);
+
+        const isInWishlist = await WishlistModel.exists({ products: id });
+        if (isInWishlist) throw new AppError('This product is currently in use and cannot be deleted. Mark it Inactive instead.', STATUS_CODES.CONFLICT);
+
+        const isInCombo = await ComboOfferModel.exists({ "products.productId": id });
+        if (isInCombo) throw new AppError('This product is currently in use and cannot be deleted. Mark it Inactive instead.', STATUS_CODES.CONFLICT);
+
+        const isInOrder = await OrderModel.exists({ "orderedProducts.productId": id });
+        if (isInOrder) throw new AppError('This product is currently in use and cannot be deleted. Mark it Inactive instead.', STATUS_CODES.CONFLICT);
+
+        const isInOffer = await OfferModel.exists({ productId: id });
+        if (isInOffer) throw new AppError('This product is currently in use and cannot be deleted. Mark it Inactive instead.', STATUS_CODES.CONFLICT);
+
         const product = await this.productRepository.deleteProduct(id);
         if (!product) {
             throw new AppError('Product not found', STATUS_CODES.NOT_FOUND);
@@ -311,7 +332,7 @@ export class ToggleProductHighlightUseCase {
     ) {}
 
     async execute(id: string, field: string, value: boolean) {
-        const allowedFields = ['featured', 'isPopular', 'isTrending', 'isBestSeller'];
+        const allowedFields = ['featured', 'isPopular', 'isTrending', 'isBestSeller', 'isActive'];
         if (!allowedFields.includes(field)) {
             throw new AppError('Invalid highlight field', STATUS_CODES.BAD_REQUEST);
         }

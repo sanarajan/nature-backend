@@ -7,6 +7,7 @@ import {
 } from '../../interfaces/user/IWishlistUseCases';
 import { IWishlistRepository } from '../../../domain/repositories/ICartRepository';
 import { WishlistModel } from '../../../infrastructure/database/models/WishlistModel';
+import { ProductModel } from '../../../infrastructure/database/models/ProductModel';
 import { NotFoundError, ValidationError } from '../../../shared/utils/AppError';
 
 @injectable()
@@ -26,6 +27,10 @@ export class ToggleWishlistUseCase implements IToggleWishlistUseCase {
             await this.wishlistRepository.deleteItem(existingItem._id.toString());
             return { action: 'removed' };
         } else {
+            const product = await ProductModel.findById(productId);
+            if (!product || product.isActive === false) {
+                throw new ValidationError('This product is currently unavailable.');
+            }
             const newItem = new WishlistModel({
                 user: new mongoose.Types.ObjectId(userId),
                 products: new mongoose.Types.ObjectId(productId)
@@ -42,8 +47,19 @@ export class GetWishlistUseCase implements IGetWishlistUseCase {
 
     async execute(userId: string): Promise<any[]> {
         const wishlist = await this.wishlistRepository.findByUserId(userId);
+        
+        // Clean up stale (hard-deleted) products from DB
+        const validWishlist = [];
+        for (const item of wishlist) {
+            if (item.products == null) {
+                await this.wishlistRepository.deleteItem(item._id);
+            } else {
+                validWishlist.push(item);
+            }
+        }
+        
         // Flatten the response to return an array of products
-        return wishlist.map((item: any) => item.products);
+        return validWishlist.map((item: any) => item.products);
     }
 }
 
@@ -62,11 +78,14 @@ export class SyncWishlistUseCase implements ISyncWishlistUseCase {
             if (mongoose.Types.ObjectId.isValid(pid)) {
                 const existingItem = await this.wishlistRepository.findItem(userId, pid);
                 if (!existingItem) {
-                    const newItem = new WishlistModel({
-                        user: userObjectId,
-                        products: new mongoose.Types.ObjectId(pid)
-                    });
-                    await this.wishlistRepository.save(newItem);
+                    const product = await ProductModel.findById(pid);
+                    if (product && product.isActive !== false) {
+                        const newItem = new WishlistModel({
+                            user: userObjectId,
+                            products: new mongoose.Types.ObjectId(pid)
+                        });
+                        await this.wishlistRepository.save(newItem);
+                    }
                 }
             }
         }

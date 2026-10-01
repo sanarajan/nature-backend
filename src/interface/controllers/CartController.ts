@@ -74,8 +74,8 @@ export class CartController {
             console.log("Cart API syncOfflineCart req.cookies: ", req.cookies);
             const userId = (req as any).user?.id;
             const influencerRef = req.cookies?.influencer_ref;
-            const { cartItems } = req.body;
-            const calculatedCart = await this.syncOfflineCartUseCase.execute(userId, cartItems, influencerRef);
+            const { cartItems, isAtomicCombo } = req.body;
+            const calculatedCart = await this.syncOfflineCartUseCase.execute(userId, cartItems, influencerRef, isAtomicCombo);
             res.status(STATUS_CODES.OK).json({ success: true, message: 'Cart synced successfully', data: calculatedCart });
         } catch (error: any) {
             res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message || 'Error calculating totals' });

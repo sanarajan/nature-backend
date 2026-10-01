@@ -89,7 +89,7 @@ export class ProductUseCases {
     }
 
     async getFilteredProducts(filters: any) {
-        const { categoryId, subcategoryId, search, minPrice, maxPrice, sort, onOffer } = filters;
+        const { categoryId, subcategoryId, search, minPrice, maxPrice, sort, onOffer, page, limit } = filters;
         const query: any = { isActive: true };
 
         if (categoryId) {
@@ -124,10 +124,27 @@ export class ProductUseCases {
         const products = await this.productRepository.findProducts(query, undefined, sortOption, populateOptions);
         const productsWithOffers = await this.applyOffers(products);
 
+        let finalProducts = productsWithOffers;
         if (onOffer === 'true') {
-            return productsWithOffers.filter(p => !!p.appliedOffer);
+            finalProducts = productsWithOffers.filter(p => !!p.appliedOffer);
         }
-        return productsWithOffers;
+
+        const pageNum = page ? parseInt(page as string, 10) : 1;
+        const limitNum = limit ? parseInt(limit as string, 10) : 12;
+        
+        const total = finalProducts.length;
+        const totalPages = Math.ceil(total / limitNum);
+        const skip = (pageNum - 1) * limitNum;
+        
+        const paginatedProducts = finalProducts.slice(skip, skip + limitNum);
+
+        return {
+            products: paginatedProducts,
+            total,
+            page: pageNum,
+            limit: limitNum,
+            totalPages
+        };
     }
 
     async getPopularProducts() {
@@ -211,6 +228,11 @@ export class ProductUseCases {
             }
         }
 
+        // Filter out combos where any required product is inactive
+        combosWithCalculations = combosWithCalculations.filter(c =>
+            c.products.every((p: any) => p.productId?.isActive !== false)
+        );
+
         if (sort === 'best-savings') {
             combosWithCalculations.sort((a: any, b: any) => b.savings - a.savings);
         } else if (sort === 'price-low-high') {
@@ -279,6 +301,13 @@ export class ProductUseCases {
         }
 
         const comboObj: any = combo.toObject ? combo.toObject() : combo;
+
+        // Guard: if any required product is inactive, combo is unavailable to customers
+        const hasInactiveProduct = comboObj.products.some((p: any) => p.productId?.isActive === false);
+        if (hasInactiveProduct) {
+            throw new AppError('This combo is currently unavailable', STATUS_CODES.NOT_FOUND);
+        }
+
         let totalMRP = 0;
 
         const products = comboObj.products.map((p: any) => {

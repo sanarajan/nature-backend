@@ -15,7 +15,7 @@ export interface IRemoveCartItemUseCase {
 }
 
 export interface ISyncOfflineCartUseCase {
-    execute(userId: string, cartItems: any[], influencerRef?: string): Promise<any>;
+    execute(userId: string, cartItems: any[], influencerRef?: string, isAtomicCombo?: boolean): Promise<any>;
 }
 
 export interface ICalculateCartTotalsUseCase {

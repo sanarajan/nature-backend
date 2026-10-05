@@ -151,6 +151,14 @@ container.registerSingleton<AdminGetAllCategoriesUseCase>('IGetAllCategoriesUseC
 container.registerSingleton<UpdateCategoryUseCase>('IUpdateCategoryUseCase', UpdateCategoryUseCase);
 container.registerSingleton<DeleteCategoryUseCase>('IDeleteCategoryUseCase', DeleteCategoryUseCase);
 
+// Admin Unit UseCases
+import { AddUnitUseCase, GetAllUnitsUseCase as AdminGetAllUnitsUseCase, GetUnitByIdUseCase, UpdateUnitUseCase as AdminUpdateUnitUseCase, DeleteUnitUseCase } from '../../application/usecases/admin/AdminUnitUseCases';
+container.registerSingleton<AddUnitUseCase>('IAddUnitUseCase', AddUnitUseCase);
+container.registerSingleton<AdminGetAllUnitsUseCase>('IGetAllUnitsUseCase', AdminGetAllUnitsUseCase);
+container.registerSingleton<GetUnitByIdUseCase>('IGetUnitByIdUseCase', GetUnitByIdUseCase);
+container.registerSingleton<AdminUpdateUnitUseCase>('IUpdateUnitUseCase', AdminUpdateUnitUseCase);
+container.registerSingleton<DeleteUnitUseCase>('IDeleteUnitUseCase', DeleteUnitUseCase);
+
 // Admin Subcategory UseCases
 import { AddSubcategoryUseCase, GetAllSubcategoriesUseCase, UpdateSubcategoryUseCase, DeleteSubcategoryUseCase } from '../../application/usecases/admin/AdminSubcategoryUseCases';
 container.registerSingleton<AddSubcategoryUseCase>('IAddSubcategoryUseCase', AddSubcategoryUseCase);

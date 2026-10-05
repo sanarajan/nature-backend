@@ -1,5 +1,6 @@
 import { IProductRepository } from '../../../domain/repositories/IProductRepository';
 import { ProductModel } from '../models/ProductModel';
+import mongoose from 'mongoose';
 
 export class ProductRepository implements IProductRepository {
     async findById(id: string): Promise<any> {
@@ -45,6 +46,26 @@ export class ProductRepository implements IProductRepository {
 
     async countBySubcategoryId(subcategoryId: string): Promise<number> {
         return await ProductModel.countDocuments({ subcategoryId });
+    }
+
+    async countByUnitId(unitId: string, unitName?: string): Promise<number> {
+        let orConditions: any[] = [];
+        
+        // Handle valid ObjectId
+        if (mongoose.Types.ObjectId.isValid(unitId)) {
+            orConditions.push({ unitId: new mongoose.Types.ObjectId(unitId) });
+        }
+        
+        // Handle string representation
+        orConditions.push({ unitId: unitId });
+
+        // Handle case-insensitive legacy string names if provided
+        if (unitName) {
+            orConditions.push({ unitId: unitName });
+            orConditions.push({ unitId: new RegExp(`^${unitName}$`, 'i') });
+        }
+
+        return await ProductModel.collection.countDocuments({ $or: orConditions });
     }
 
     async getProductCountsByCategory(): Promise<Array<{ _id: string, count: number }>> {

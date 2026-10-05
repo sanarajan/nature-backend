@@ -9,5 +9,6 @@ export interface IProductRepository {
     deleteProduct(id: string): Promise<any>;
     countByCategoryId(categoryId: string): Promise<number>;
     countBySubcategoryId(subcategoryId: string): Promise<number>;
+    countByUnitId(unitId: string, unitName?: string): Promise<number>;
     getProductCountsByCategory(): Promise<Array<{ _id: string, count: number }>>;
 }

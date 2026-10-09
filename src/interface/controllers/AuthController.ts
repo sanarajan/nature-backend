@@ -76,15 +76,17 @@ export class AuthController {
 
             res.cookie(`${prefix}refreshToken`, refreshToken, {
                 httpOnly: true,
-                secure: env.NODE_ENV === 'production',
-                sameSite: 'lax',
+                secure:true,// env.NODE_ENV === 'production',
+                // sameSite: 'lax',
+                sameSite: 'none',
                 maxAge: 7 * 24 * 60 * 60 * 1000, 
             });
 
             res.cookie(`${prefix}jwt`, accessToken, {
                 httpOnly: true,
-                secure: env.NODE_ENV === 'production',
-                sameSite: 'lax',
+                secure:true,
+                // secure: env.NODE_ENV === 'production',
+                sameSite: 'none',
                 maxAge: 15 * 60 * 1000,
             });
 
@@ -193,8 +195,9 @@ export class AuthController {
 
             res.cookie(`${prefix}jwt`, accessToken, {
                 httpOnly: true,
-                secure: env.NODE_ENV === 'production',
-                sameSite: 'lax',
+                secure:true,
+                // secure: env.NODE_ENV === 'production',
+                sameSite: 'none',
                 maxAge: 15 * 60 * 1000,
             });
 

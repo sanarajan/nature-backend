@@ -38,15 +38,15 @@ export class GoogleAuthController {
 
             res.cookie(`${prefix}refreshToken`, refreshToken, {
                 httpOnly: true,
-                secure: env.NODE_ENV === 'production',
-                sameSite: 'lax',
+                secure:true,
+                sameSite: 'none',
                 maxAge: 7 * 24 * 60 * 60 * 1000,
             });
 
             res.cookie(`${prefix}jwt`, accessToken, {
                 httpOnly: true,
-                secure: env.NODE_ENV === 'production',
-                sameSite: 'lax',
+               secure:true,
+                sameSite: 'none',
                 maxAge: 15 * 60 * 1000,
             });
 

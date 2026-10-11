@@ -24,6 +24,8 @@ export interface IComboOfferDocument extends Document {
     routineLabel?: string;
     targetConcerns?: string[];
     whySpecial?: string[];
+    keyIngredients?: { ingredient: string; type: string }[];
+    otherFormulationIngredients?: string;
     howToUseSteps?: { title: string; description: string }[];
     recommendedRoutine?: string;
     whoMayBenefit?: string[];
@@ -76,6 +78,11 @@ const ComboOfferSchema = new Schema<IComboOfferDocument>({
     routineLabel: { type: String },
     targetConcerns: [{ type: String }],
     whySpecial: [{ type: String }],
+    keyIngredients: [{
+        ingredient: { type: String },
+        type: { type: String }
+    }],
+    otherFormulationIngredients: { type: String },
     howToUseSteps: [{ 
         title: { type: String },
         description: { type: String }

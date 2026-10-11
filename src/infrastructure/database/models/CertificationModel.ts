@@ -4,6 +4,9 @@ export interface ICertificationDocument extends Document {
     name: string;
     fileUrl: string;
     originalFileName?: string;
+    pdfUrl?: string;
+    originalPdfName?: string;
+    pdfPublicId?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -11,7 +14,10 @@ export interface ICertificationDocument extends Document {
 const certificationSchema = new Schema<ICertificationDocument>({
     name: { type: String, required: true },
     fileUrl: { type: String, required: true },
-    originalFileName: { type: String }
+    originalFileName: { type: String },
+    pdfUrl: { type: String },
+    originalPdfName: { type: String },
+    pdfPublicId: { type: String }
 }, { timestamps: true });
 
 export const CertificationModel = mongoose.model<ICertificationDocument>('Certification', certificationSchema);

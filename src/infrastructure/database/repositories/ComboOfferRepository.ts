@@ -9,12 +9,12 @@ export class ComboOfferRepository implements IComboOfferRepository {
 
     async findComboOfferById(id: string): Promise<any> {
         return await ComboOfferModel.findById(id)
-            .populate('products.productId', 'productName price sku stock categoryId isActive');
+            .populate('products.productId', 'productName price sku stock categoryId isActive keyIngredients otherIngredients');
     }
 
     async findAllComboOffers(): Promise<any[]> {
         return await ComboOfferModel.find({ isDeleted: { $ne: true } })
-            .populate('products.productId', 'productName price stock categoryId isActive')
+            .populate('products.productId', 'productName price stock categoryId isActive keyIngredients otherIngredients')
             .sort({ createdAt: -1 });
     }
 

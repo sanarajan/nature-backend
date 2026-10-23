@@ -6,11 +6,14 @@ import { OrderModel } from '../../../infrastructure/database/models/OrderModel';
 import { UserModel } from '../../../infrastructure/database/models/UserModel';
 import { EmailService } from '../../../infrastructure/services/EmailService';
 import { UserLoyaltyUseCases } from '../user/UserLoyaltyUseCases';
+import { IWhatsAppService } from '../../../domain/services/IWhatsAppService';
+import { WhatsAppService } from '../../../infrastructure/services/WhatsAppService';
 
 @injectable()
 export class GetAllOrdersUseCase {
     constructor(
-        @inject('IOrderRepository') private orderRepository: IOrderRepository
+        @inject('IOrderRepository') private orderRepository: IOrderRepository,
+        
     ) {}
 
     async execute() {
@@ -64,7 +67,8 @@ export class GetOrderByIdUseCase {
 @injectable()
 export class UpdateOrderStatusUseCase {
     constructor(
-        @inject('IEmailService') private emailService: EmailService
+        @inject('IEmailService') private emailService: EmailService,
+         @inject('IWhatsAppService') private whatsAppService?: IWhatsAppService
     ) {}
 
     async execute(id: string, data: any, adminName: string) {
@@ -343,12 +347,137 @@ export class UpdateOrderStatusUseCase {
         }
 
         await order.save();
+        
+        // WhatsApp notification for full-order delivery only
+        if (
+            status === 'Delivered' &&
+            !productId &&
+            order.userId &&
+            this.whatsAppService
+        ) {
+            const user = order.userId as any;
+
+            const allProductsDelivered =
+                order.orderedProducts.length > 0 &&
+                order.orderedProducts.every(
+                    (product: any) => product.orderStatus === 'Delivered'
+                );
+
+            const alreadySent = order.statusHistory.some(
+                (h: any) => h.status === 'Order Delivered WhatsApp Sent'
+            );
+
+            if (
+                allProductsDelivered &&
+                !alreadySent &&
+                user.phoneNumber
+            ) {
+                try {
+                    const orderUrl =
+                         order._id.toString();
+
+                    await this.whatsAppService.sendOrderDelivered(
+                        user.phoneNumber,
+                        user.displayName || user.name || 'Customer',
+                        order.orderId,
+                        orderUrl
+                    );
+
+                    order.statusHistory.push({
+                        status: 'Order Delivered WhatsApp Sent',
+                        timestamp: new Date(),
+                        updatedBy: 'System'
+                    });
+
+                    await order.save();
+                } catch (whatsAppError) {
+                    console.error(
+                        'Error sending order delivered WhatsApp:',
+                        whatsAppError
+                    );
+                }
+            }
+        }
+
+//shipping whatsap message
+
+        // WhatsApp notification for shipped products
+        if (
+            status === 'Shipped' &&
+            order.userId &&
+            this.whatsAppService
+        ) {
+            const user = order.userId as any;
+
+            if (user.phoneNumber) {
+                const productsToNotify = productId
+                    ? order.orderedProducts.filter(
+                          (product: any) =>
+                              product.productId?.toString() === productId ||
+                              product._id?.toString() === productId
+                      )
+                    : order.orderedProducts;
+
+                for (const product of productsToNotify as any[]) {
+                    if (!product.shippingDetails) {
+                        console.warn(
+                            `Shipping details missing for ${product.productName}; skipping WhatsApp.`
+                        );
+                        continue;
+                    }
+
+                    const itemId =
+                        product._id?.toString() ||
+                        product.productId?.toString();
+
+                    const sentMarker =
+                        `Product Shipped WhatsApp Sent (${itemId})`;
+
+                    const alreadySent = order.statusHistory.some(
+                        (history: any) =>
+                            history.status === sentMarker
+                    );
+
+                    if (alreadySent) {
+                        continue;
+                    }
+
+                    try {
+                     
+
+                                                await this.whatsAppService.sendProductShipped(
+                            user.phoneNumber,
+                            user.displayName || user.name || 'Customer',
+                            product.productName,
+                            order.orderId,
+                            product.shippingDetails.agencyUrl ||
+                                order._id.toString()
+                        );
+
+                        order.statusHistory.push({
+                            status: sentMarker,
+                            timestamp: new Date(),
+                            updatedBy: 'System'
+                        });
+
+                        await order.save();
+                    } catch (whatsAppError) {
+                        console.error(
+                            `Error sending shipped WhatsApp for ${product.productName}:`,
+                            whatsAppError
+                        );
+                    }
+                }
+            }
+        }
 
         if (status === 'Shipped' && shippedProduct && order.userId) {
             if (!shippedProduct.shippingDetails) {
                 throw new AppError('Shipping details are missing for shipped product', STATUS_CODES.BAD_REQUEST);
             }
             const user = order.userId as any;
+
+            
             if (user.email) {
                 try {
                     await this.emailService.sendShippingEmail(
@@ -361,6 +490,87 @@ export class UpdateOrderStatusUseCase {
                     );
                 } catch (emailError) {
                     console.error('Error sending email:', emailError);
+                }
+            }
+        }
+
+        if (status === 'Delivered' && order.userId && this.emailService) {
+            const user = order.userId as any;
+            if (user.email) {
+                const alreadySent = order.statusHistory.some((h: any) => h.status === `Delivery Confirmation Email Sent (${updatedItemName})`);
+                if (!alreadySent) {
+                    try {
+                        const itemsToDeliver = productId
+                            ? order.orderedProducts.filter(p => p.productId.toString() === productId || (p as any)._id?.toString() === productId)
+                            : order.orderedProducts;
+
+                        await this.emailService.sendDeliveryConfirmationEmail({
+                            email: user.email,
+                            customerName: user.displayName || user.name || 'Valued Customer',
+                            orderId: order.orderId,
+                            items: itemsToDeliver.map(p => ({
+                                productName: p.productName,
+                                quantity: p.quantity
+                            }))
+                        });
+
+                        order.statusHistory.push({
+                            status: `Delivery Confirmation Email Sent (${updatedItemName})`,
+                            timestamp: new Date(),
+                            updatedBy: 'System'
+                        });
+                        await order.save();
+                    } catch (emailError) {
+                        console.error('Error sending delivery confirmation email:', emailError);
+                    }
+                }
+            }
+        }
+
+        //here we need to make single product delivered whatsapp message
+
+        //end here we need to make single product delivered whatsapp message
+
+        if (status === 'Cancelled' && order.userId && this.emailService) {
+            const user = order.userId as any;
+            if (user.email) {
+                const alreadySent = order.statusHistory.some((h: any) => h.status === `Cancellation Email Sent (${updatedItemName})`);
+                if (!alreadySent) {
+                    try {
+                        const cancelledItems = productId
+                            ? order.orderedProducts.filter(p => p.productId.toString() === productId || (p as any)._id?.toString() === productId)
+                            : order.orderedProducts;
+
+                        let refundInfo = '';
+                        if (order.paymentMethod === 'COD') {
+                            refundInfo = 'Since this was a Cash on Delivery order, no payment was collected and no refund is required.';
+                        } else if (order.paymentStatus === 'Refunded') {
+                            refundInfo = `A refund of ₹${order.refundedAmount || order.totalAmount} has been processed back to your original payment method.`;
+                        } else {
+                            refundInfo = 'A refund request has been initiated and will be processed back to your original payment method.';
+                        }
+
+                        await this.emailService.sendOrderCancellationEmail({
+                            email: user.email,
+                            customerName: user.displayName || user.name || 'Valued Customer',
+                            orderId: order.orderId,
+                            items: cancelledItems.map(p => ({
+                                productName: p.productName,
+                                quantity: p.quantity
+                            })),
+                            reason: reason || 'Cancelled by Admin',
+                            refundInfo
+                        });
+
+                        order.statusHistory.push({
+                            status: `Cancellation Email Sent (${updatedItemName})`,
+                            timestamp: new Date(),
+                            updatedBy: 'System'
+                        });
+                        await order.save();
+                    } catch (emailError) {
+                        console.error('Error sending cancellation email:', emailError);
+                    }
                 }
             }
         }
@@ -423,14 +633,19 @@ export class UpdateDeliveryDelayUseCase {
 
 @injectable()
 export class UpdatePaymentStatusUseCase {
+    constructor(
+        @inject('IEmailService') private emailService?: EmailService
+    ) {}
+
     async execute(id: string, data: any, adminName: string) {
         const { status, refundedAmount } = data;
 
-        const order = await OrderModel.findById(id);
+        const order = await OrderModel.findById(id).populate({ path: 'userId', model: 'User', select: 'displayName email' });
         if (!order) {
             throw new AppError('Order not found', STATUS_CODES.NOT_FOUND);
         }
 
+        const previousPaymentStatus = order.paymentStatus;
         order.paymentStatus = status;
         if (refundedAmount !== undefined) {
             order.refundedAmount = refundedAmount;
@@ -443,6 +658,107 @@ export class UpdatePaymentStatusUseCase {
         });
 
         await order.save();
+
+       if (
+    status === 'Refunded' &&
+    previousPaymentStatus !== 'Refunded' &&
+    this.emailService &&
+    order.userId
+) {
+    const user = order.userId as any;
+
+    if (user.email) {
+        const returnedItems = order.orderedProducts.filter(p =>
+            [
+                'Returned',
+                'Return Approved',
+                'Return Request',
+                'Return',
+                'Cancelled',
+                'Cancellation Request'
+            ].includes(p.orderStatus)
+        );
+
+        const itemsToList =
+            returnedItems.length > 0 ? returnedItems : order.orderedProducts;
+
+        const emailItems = itemsToList.map(p => ({
+            productName: p.productName,
+            quantity: p.quantity
+        }));
+
+        const refundAmount =
+            refundedAmount ?? order.refundedAmount ?? order.totalAmount;
+
+        // Existing combined Return/Refund email — preserve it
+        const oldEmailAlreadySent = order.statusHistory.some(
+            (h: any) =>
+                h.status === 'Return/Refund Confirmation Email Sent'
+        );
+
+        if (!oldEmailAlreadySent) {
+            try {
+                await this.emailService.sendReturnRefundConfirmationEmail({
+                    email: user.email,
+                    customerName:
+                        user.displayName || user.name || 'Valued Customer',
+                    orderId: order.orderId,
+                    items: emailItems,
+                    refundAmount,
+                    paymentMethod: order.paymentMethod || 'Online',
+                    transactionReference: order.razorpayPaymentId
+                });
+
+                order.statusHistory.push({
+                    status: 'Return/Refund Confirmation Email Sent',
+                    timestamp: new Date(),
+                    updatedBy: 'System'
+                });
+
+                await order.save();
+            } catch (emailError) {
+                console.error(
+                    'Error sending return/refund confirmation email:',
+                    emailError
+                );
+            }
+        }
+
+        // New refund-success email — independent marker
+        const refundEmailAlreadySent = order.statusHistory.some(
+            (h: any) => h.status === 'Payment Refunded Email Sent'
+        );
+
+        if (!refundEmailAlreadySent) {
+            try {
+                await this.emailService.sendPaymentRefundedEmail({
+                    email: user.email,
+                    customerName:
+                        user.displayName || user.name || 'Valued Customer',
+                    orderId: order.orderId,
+                    items: emailItems,
+                    refundAmount,
+                    paymentMethod: order.paymentMethod || 'Online',
+                    transactionReference: order.razorpayPaymentId
+                });
+
+                order.statusHistory.push({
+                    status: 'Payment Refunded Email Sent',
+                    timestamp: new Date(),
+                    updatedBy: 'System'
+                });
+
+                await order.save();
+            } catch (emailError) {
+                console.error(
+                    'Error sending payment-refunded email:',
+                    emailError
+                );
+            }
+        }
+    }
+}
+
         return order;
     }
 }

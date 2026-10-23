@@ -2,6 +2,7 @@ import { container } from 'tsyringe';
 import { LoginUseCase } from '../../application/usecases/auth/LoginUseCase';
 import { RegisterUseCase } from '../../application/usecases/auth/RegisterUseCase';
 import { VerifyEmailUseCase } from '../../application/usecases/auth/VerifyEmailUseCase';
+import { ResendOtpUseCase } from '../../application/usecases/auth/ResendOtpUseCase';
 import { AuthService } from '../../application/services/AuthService';
 import { SharedPricingService } from '../../application/services/SharedPricingService';
 import {
@@ -73,6 +74,7 @@ container.registerSingleton<SharedPricingService>('ISharedPricingService', Share
 container.registerSingleton<LoginUseCase>('ILoginUseCase', LoginUseCase);
 container.registerSingleton<RegisterUseCase>('IRegisterUseCase', RegisterUseCase);
 container.registerSingleton<VerifyEmailUseCase>('IVerifyEmailUseCase', VerifyEmailUseCase);
+container.registerSingleton<ResendOtpUseCase>('IResendOtpUseCase', ResendOtpUseCase);
 container.registerSingleton<ForgotPasswordUseCase>('IForgotPasswordUseCase', ForgotPasswordUseCase);
 container.registerSingleton<ResetPasswordUseCase>('IResetPasswordUseCase', ResetPasswordUseCase);
 container.registerSingleton<GoogleAuthService>('IGoogleAuthService', GoogleAuthService);
@@ -276,4 +278,17 @@ import { AdminCertificationUseCases } from '../../application/usecases/admin/Adm
 import { UserCertificationUseCases } from '../../application/usecases/user/UserCertificationUseCases';
 container.registerSingleton(AdminCertificationUseCases);
 container.registerSingleton(UserCertificationUseCases);
+
+// Sponsor UseCases
+import { AdminSponsorUseCases } from '../../application/usecases/admin/AdminSponsorUseCases';
+import { UserSponsorUseCases } from '../../application/usecases/user/UserSponsorUseCases';
+container.registerSingleton(AdminSponsorUseCases);
+container.registerSingleton(UserSponsorUseCases);
+
+// News UseCases
+import { AdminNewsUseCases } from '../../application/usecases/admin/AdminNewsUseCases';
+import { UserNewsUseCases } from '../../application/usecases/user/UserNewsUseCases';
+container.registerSingleton(AdminNewsUseCases);
+container.registerSingleton(UserNewsUseCases);
+
 

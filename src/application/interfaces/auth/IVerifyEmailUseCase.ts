@@ -1,3 +1,3 @@
 export interface IVerifyEmailUseCase {
-    execute(email: string, token: string): Promise<{ success: boolean; message: string }>;
+    execute(email: string, token: string | number): Promise<{ success: boolean; message: string }>;
 }

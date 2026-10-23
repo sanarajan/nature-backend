@@ -25,6 +25,7 @@ export class GetCategoriesWithCountsUseCase {
             _id: cat._id,
             categoryName: cat.categoryName,
             description: cat.description,
+            imageUrl: cat.imageUrl,
             productCount: countMap[cat._id?.toString() || ''] || 0
         }));
     }

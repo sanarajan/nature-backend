@@ -5,4 +5,5 @@ export interface IComboOfferRepository {
     updateComboOffer(id: string, data: any): Promise<any>;
     deleteComboOffer(id: string): Promise<void>;
     toggleComboOfferStatus(id: string): Promise<any>;
+    findLatestActiveComboOffer(): Promise<any | null>;
 }

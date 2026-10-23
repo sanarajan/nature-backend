@@ -14,7 +14,24 @@ function extractCertificationLogoPublicId(url?: string): string | null {
     if (!url || typeof url !== 'string') return null;
     try {
         if (!url.includes('res.cloudinary.com')) return null;
-        const match = url.match(/\/image\/upload\/(?:v\d+\/)?(natural_ayam\/certifications\/(?!pdfs\/)[^.?#]+)(?:\.[a-zA-Z0-9]+)?/);
+        const match = url.match(/\/image\/upload\/(?:v\d+\/)?(natural_ayam\/certifications\/(?!pdfs\/|certificates\/)[^.?#]+)(?:\.[a-zA-Z0-9]+)?/);
+        if (match && match[1]) {
+            return decodeURIComponent(match[1]);
+        }
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+/**
+ * Safely extracts the Cloudinary public_id for a certificate image.
+ */
+function extractCertificateImagePublicId(url?: string): string | null {
+    if (!url || typeof url !== 'string') return null;
+    try {
+        if (!url.includes('res.cloudinary.com')) return null;
+        const match = url.match(/\/image\/upload\/(?:v\d+\/)?(natural_ayam\/certifications\/certificates\/[^.?#]+)(?:\.[a-zA-Z0-9]+)?/);
         if (match && match[1]) {
             return decodeURIComponent(match[1]);
         }
@@ -30,7 +47,16 @@ export class AdminCertificationUseCases {
         @inject('ICertificationRepository') private certificationRepository: ICertificationRepository
     ) {}
 
-    async addCertification(data: { name: string; fileData: string; originalFileName?: string; pdfData?: string; originalPdfName?: string }) {
+    async addCertification(data: {
+        name: string;
+        fileData: string;
+        originalFileName?: string;
+        certificateImageData?: string;
+        originalCertificateName?: string;
+        pdfData?: string;
+        originalPdfName?: string;
+        description?: string;
+    }) {
         const trimmedName = typeof data.name === 'string' ? data.name.trim() : '';
         if (!trimmedName) {
             throw new AppError('Certification name is required and cannot be empty or whitespace only.', STATUS_CODES.BAD_REQUEST);
@@ -38,24 +64,26 @@ export class AdminCertificationUseCases {
         if (!data.fileData) {
             throw new AppError('Logo image is required.', STATUS_CODES.BAD_REQUEST);
         }
-        if (!data.pdfData) {
-            throw new AppError('Certificate PDF file is required.', STATUS_CODES.BAD_REQUEST);
+
+        const certData = data.certificateImageData || data.pdfData;
+        if (!certData) {
+            throw new AppError('Certificate image is required.', STATUS_CODES.BAD_REQUEST);
         }
 
         // Backend logo image validation
-        const isImage = /^data:image\/(jpeg|jpg|png|webp|gif);base64,/.test(data.fileData);
-        if (!isImage) {
+        const isLogoImage = /^data:image\/(jpeg|jpg|png|webp|gif);base64,/.test(data.fileData);
+        if (!isLogoImage) {
             throw new AppError('Only JPG, JPEG, PNG, WEBP, GIF and supported image files are allowed for Logo.', STATUS_CODES.BAD_REQUEST);
         }
 
-        // Backend certificate PDF validation
-        if (!data.pdfData.startsWith('data:application/pdf;base64,')) {
-            throw new AppError('Only valid PDF files are allowed for Certificate Upload.', STATUS_CODES.BAD_REQUEST);
+        // Backend certificate image validation - strictly reject PDF
+        if (certData.startsWith('data:application/pdf;base64,') || certData.includes('%PDF-')) {
+            throw new AppError('PDF files are not allowed for certificate. Please upload an image (JPG, JPEG, PNG, WEBP).', STATUS_CODES.BAD_REQUEST);
         }
-        const pdfBase64 = data.pdfData.replace(/^data:application\/pdf;base64,/, '');
-        const pdfHeader = Buffer.from(pdfBase64.substring(0, 16), 'base64');
-        if (!pdfHeader.toString('ascii').startsWith('%PDF-')) {
-            throw new AppError('Invalid PDF file content. File does not match PDF signature.', STATUS_CODES.BAD_REQUEST);
+
+        const isCertImage = /^data:image\/(jpeg|jpg|png|webp);base64,/.test(certData);
+        if (!isCertImage) {
+            throw new AppError('Only JPG, JPEG, PNG, and WEBP image files are allowed for Certificate Image.', STATUS_CODES.BAD_REQUEST);
         }
 
         let fileUrl = '';
@@ -71,32 +99,35 @@ export class AdminCertificationUseCases {
             throw new AppError('Logo image upload failed', STATUS_CODES.INTERNAL_SERVER_ERROR);
         }
 
-        let pdfUrl = '';
-        let pdfPublicId = '';
+        let certImageUrl = '';
+        let certImagePublicId = '';
+        const originalCertName = data.originalCertificateName || data.originalPdfName;
         try {
-            // Upload PDF to Cloudinary as raw resource
-            const sanitizedPdfBase = (data.originalPdfName || 'certificate')
-                .replace(/\.[^/.]+$/, '')
-                .replace(/[^a-zA-Z0-9_-]/g, '_');
-            const rawPublicId = `natural_ayam/certifications/pdfs/${Date.now()}_${sanitizedPdfBase}.pdf`;
-            const uploadPdfRes = await cloudinary.uploader.upload(data.pdfData, {
-                public_id: rawPublicId,
-                resource_type: 'raw'
+            // Upload Certificate Image to Cloudinary as image
+            const uploadCertRes = await cloudinary.uploader.upload(certData, {
+                folder: 'natural_ayam/certifications/certificates',
+                resource_type: 'image'
             });
-            pdfPublicId = uploadPdfRes.public_id;
-            pdfUrl = cloudinary.utils.private_download_url(uploadPdfRes.public_id, '', { resource_type: 'raw', type: 'upload' });
+            certImagePublicId = uploadCertRes.public_id;
+            certImageUrl = uploadCertRes.secure_url;
         } catch (error) {
-            console.error('Cloudinary PDF upload error:', error);
-            throw new AppError('Certificate PDF upload failed', STATUS_CODES.INTERNAL_SERVER_ERROR);
+            console.error('Cloudinary certificate image upload error:', error);
+            throw new AppError('Certificate image upload failed', STATUS_CODES.INTERNAL_SERVER_ERROR);
         }
+
+        const trimmedDescription = typeof data.description === 'string' ? data.description.trim() : '';
 
         return await this.certificationRepository.create({
             name: trimmedName,
             fileUrl: fileUrl,
             originalFileName: data.originalFileName,
-            pdfUrl: pdfUrl,
-            originalPdfName: data.originalPdfName,
-            pdfPublicId: pdfPublicId
+            pdfUrl: certImageUrl,
+            originalPdfName: originalCertName,
+            pdfPublicId: certImagePublicId,
+            certificateImageUrl: certImageUrl,
+            originalCertificateName: originalCertName,
+            certificateImagePublicId: certImagePublicId,
+            description: trimmedDescription || undefined
         });
     }
 
@@ -112,7 +143,16 @@ export class AdminCertificationUseCases {
         return cert;
     }
 
-    async editCertification(id: string, data: { name: string; fileData?: string; originalFileName?: string; pdfData?: string; originalPdfName?: string }) {
+    async editCertification(id: string, data: {
+        name: string;
+        fileData?: string;
+        originalFileName?: string;
+        certificateImageData?: string;
+        originalCertificateName?: string;
+        pdfData?: string;
+        originalPdfName?: string;
+        description?: string;
+    }) {
         const trimmedName = typeof data.name === 'string' ? data.name.trim() : '';
         if (!trimmedName) {
             throw new AppError('Certification name is required and cannot be empty or whitespace only.', STATUS_CODES.BAD_REQUEST);
@@ -125,17 +165,28 @@ export class AdminCertificationUseCases {
 
         let fileUrl = existingCert.fileUrl;
         let originalFileName = existingCert.originalFileName;
+        const isExistingPdf = existingCert.pdfUrl && (existingCert.pdfUrl.toLowerCase().includes('/pdfs/') || existingCert.pdfUrl.toLowerCase().endsWith('.pdf'));
+        let certificateImageUrl = existingCert.certificateImageUrl || (!isExistingPdf ? existingCert.pdfUrl : undefined);
+        let originalCertificateName = existingCert.originalCertificateName || (!isExistingPdf ? existingCert.originalPdfName : undefined);
+        let certificateImagePublicId = existingCert.certificateImagePublicId || (!isExistingPdf ? existingCert.pdfPublicId : undefined);
         let pdfUrl = existingCert.pdfUrl;
         let originalPdfName = existingCert.originalPdfName;
         let pdfPublicId = existingCert.pdfPublicId;
+        let description = existingCert.description;
+
+        if (data.description !== undefined) {
+            description = typeof data.description === 'string' ? data.description.trim() : '';
+        }
 
         // Retain old identifiers before update
         const oldLogoPublicId = extractCertificationLogoPublicId(existingCert.fileUrl);
+        const oldCertImagePublicId = existingCert.certificateImagePublicId || extractCertificateImagePublicId(existingCert.certificateImageUrl || existingCert.pdfUrl);
         const oldPdfPublicId = existingCert.pdfPublicId;
+
         let newLogoUploaded = false;
-        let newPdfUploaded = false;
+        let newCertUploaded = false;
         let newLogoPublicId: string | null = null;
-        let newPdfPublicId: string | null = null;
+        let newCertPublicId: string | null = null;
 
         // If a new Logo was provided
         if (data.fileData) {
@@ -159,34 +210,34 @@ export class AdminCertificationUseCases {
             }
         }
 
-        // If a new PDF was provided
-        if (data.pdfData) {
-            if (!data.pdfData.startsWith('data:application/pdf;base64,')) {
-                throw new AppError('Only valid PDF files are allowed for Certificate Upload.', STATUS_CODES.BAD_REQUEST);
+        // If a new Certificate Image was provided
+        const certData = data.certificateImageData || data.pdfData;
+        if (certData) {
+            if (certData.startsWith('data:application/pdf;base64,') || certData.includes('%PDF-')) {
+                throw new AppError('PDF files are not allowed for certificate. Please upload an image (JPG, JPEG, PNG, WEBP).', STATUS_CODES.BAD_REQUEST);
             }
-            const pdfBase64 = data.pdfData.replace(/^data:application\/pdf;base64,/, '');
-            const pdfHeader = Buffer.from(pdfBase64.substring(0, 16), 'base64');
-            if (!pdfHeader.toString('ascii').startsWith('%PDF-')) {
-                throw new AppError('Invalid PDF file content. File does not match PDF signature.', STATUS_CODES.BAD_REQUEST);
+
+            const isCertImage = /^data:image\/(jpeg|jpg|png|webp);base64,/.test(certData);
+            if (!isCertImage) {
+                throw new AppError('Only JPG, JPEG, PNG, and WEBP image files are allowed for Certificate Image.', STATUS_CODES.BAD_REQUEST);
             }
 
             try {
-                const sanitizedPdfBase = (data.originalPdfName || 'certificate')
-                    .replace(/\.[^/.]+$/, '')
-                    .replace(/[^a-zA-Z0-9_-]/g, '_');
-                const rawPublicId = `natural_ayam/certifications/pdfs/${Date.now()}_${sanitizedPdfBase}.pdf`;
-                const uploadPdfRes = await cloudinary.uploader.upload(data.pdfData, {
-                    public_id: rawPublicId,
-                    resource_type: 'raw'
+                const uploadCertRes = await cloudinary.uploader.upload(certData, {
+                    folder: 'natural_ayam/certifications/certificates',
+                    resource_type: 'image'
                 });
-                pdfPublicId = uploadPdfRes.public_id;
-                newPdfPublicId = uploadPdfRes.public_id;
-                pdfUrl = cloudinary.utils.private_download_url(uploadPdfRes.public_id, '', { resource_type: 'raw', type: 'upload' });
-                newPdfUploaded = true;
-                originalPdfName = data.originalPdfName || originalPdfName;
+                certificateImagePublicId = uploadCertRes.public_id;
+                certificateImageUrl = uploadCertRes.secure_url;
+                newCertPublicId = uploadCertRes.public_id;
+                newCertUploaded = true;
+                originalCertificateName = data.originalCertificateName || data.originalPdfName || originalCertificateName;
+                pdfUrl = uploadCertRes.secure_url;
+                pdfPublicId = uploadCertRes.public_id;
+                originalPdfName = originalCertificateName;
             } catch (error) {
-                console.error('Cloudinary PDF upload error:', error);
-                throw new AppError('Certificate PDF upload failed', STATUS_CODES.INTERNAL_SERVER_ERROR);
+                console.error('Cloudinary certificate image upload error:', error);
+                throw new AppError('Certificate image upload failed', STATUS_CODES.INTERNAL_SERVER_ERROR);
             }
         }
 
@@ -197,11 +248,14 @@ export class AdminCertificationUseCases {
             originalFileName: originalFileName,
             pdfUrl: pdfUrl,
             originalPdfName: originalPdfName,
-            pdfPublicId: pdfPublicId
+            pdfPublicId: pdfPublicId,
+            certificateImageUrl: certificateImageUrl,
+            originalCertificateName: originalCertificateName,
+            certificateImagePublicId: certificateImagePublicId,
+            description: description
         });
 
         // 2. Only after database update succeeds, clean up old assets from Cloudinary
-        // Clean up old logo if replaced
         if (newLogoUploaded && oldLogoPublicId && oldLogoPublicId !== newLogoPublicId) {
             try {
                 await cloudinary.uploader.destroy(oldLogoPublicId, { resource_type: 'image' });
@@ -210,12 +264,22 @@ export class AdminCertificationUseCases {
             }
         }
 
-        // Clean up old PDF if replaced
-        if (newPdfUploaded && oldPdfPublicId && typeof oldPdfPublicId === 'string' && oldPdfPublicId !== newPdfPublicId && oldPdfPublicId.startsWith('natural_ayam/certifications/pdfs/')) {
-            try {
-                await cloudinary.uploader.destroy(oldPdfPublicId, { resource_type: 'raw' });
-            } catch (err) {
-                console.error('Failed to cleanup old certificate PDF from Cloudinary:', err);
+        if (newCertUploaded) {
+            // Clean up old certificate image if it was an image
+            if (oldCertImagePublicId && oldCertImagePublicId !== newCertPublicId && oldCertImagePublicId.startsWith('natural_ayam/certifications/certificates/')) {
+                try {
+                    await cloudinary.uploader.destroy(oldCertImagePublicId, { resource_type: 'image' });
+                } catch (err) {
+                    console.error('Failed to cleanup old certificate image from Cloudinary:', err);
+                }
+            }
+            // Clean up old PDF if it was a raw PDF
+            if (oldPdfPublicId && typeof oldPdfPublicId === 'string' && oldPdfPublicId.startsWith('natural_ayam/certifications/pdfs/')) {
+                try {
+                    await cloudinary.uploader.destroy(oldPdfPublicId, { resource_type: 'raw' });
+                } catch (err) {
+                    console.error('Failed to cleanup old certificate PDF from Cloudinary:', err);
+                }
             }
         }
 
@@ -229,13 +293,13 @@ export class AdminCertificationUseCases {
         }
 
         const oldLogoUrl = existingCert.fileUrl;
+        const oldCertImagePublicId = existingCert.certificateImagePublicId || extractCertificateImagePublicId(existingCert.certificateImageUrl || existingCert.pdfUrl);
         const oldPdfPublicId = existingCert.pdfPublicId;
 
         // 1. Delete record from MongoDB first
         await this.certificationRepository.delete(id);
 
         // 2. Only after MongoDB deletion succeeds, clean up associated files from Cloudinary
-        // Clean up logo image if public_id can be reliably extracted
         const logoPublicId = extractCertificationLogoPublicId(oldLogoUrl);
         if (logoPublicId) {
             try {
@@ -247,15 +311,20 @@ export class AdminCertificationUseCases {
             console.warn('Skipping logo Cloudinary deletion: Could not determine valid certification public ID from URL');
         }
 
-        // Clean up certificate PDF if valid pdfPublicId exists
+        if (oldCertImagePublicId && oldCertImagePublicId.startsWith('natural_ayam/certifications/certificates/')) {
+            try {
+                await cloudinary.uploader.destroy(oldCertImagePublicId, { resource_type: 'image' });
+            } catch (err) {
+                console.error('Failed to cleanup certificate image from Cloudinary:', err);
+            }
+        }
+
         if (oldPdfPublicId && typeof oldPdfPublicId === 'string' && oldPdfPublicId.startsWith('natural_ayam/certifications/pdfs/')) {
             try {
                 await cloudinary.uploader.destroy(oldPdfPublicId, { resource_type: 'raw' });
             } catch (err) {
                 console.error('Failed to cleanup certificate PDF from Cloudinary:', err);
             }
-        } else if (existingCert.pdfUrl) {
-            console.warn('Skipping PDF Cloudinary deletion: Record has no valid certification pdfPublicId');
         }
 
         return true;

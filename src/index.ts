@@ -45,6 +45,10 @@ import { startInfluencerCommissionCron } from './infrastructure/cron/InfluencerC
 import { startNaturePointsExpiryCron } from './infrastructure/cron/NaturePointsExpiryCron';
 import adminCertificationRoutes from './interface/routes/admin/adminCertificationRoutes';
 import userCertificationRoutes from './interface/routes/user/userCertificationRoutes';
+import adminSponsorRoutes from './interface/routes/admin/adminSponsorRoutes';
+import userSponsorRoutes from './interface/routes/user/userSponsorRoutes';
+import adminNewsRoutes from './interface/routes/admin/adminNewsRoutes';
+import userNewsRoutes from './interface/routes/user/userNewsRoutes';
 
 // Exported models to ensure registration
 import './infrastructure/database/models/CategoryModel';
@@ -72,6 +76,8 @@ import './infrastructure/database/models/SpinWheelSettingModel';
 import './infrastructure/database/models/SpinWheelSegmentModel';
 import './infrastructure/database/models/SpinHistoryModel';
 import './infrastructure/database/models/CertificationModel';
+import './infrastructure/database/models/SponsorModel';
+import './infrastructure/database/models/NewsModel';
 
 const app = express();
 
@@ -145,6 +151,10 @@ app.use('/api/user/spin-wheel', userSpinWheelRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/admin/certifications', adminCertificationRoutes);
 app.use('/api/user/certifications', userCertificationRoutes);
+app.use('/api/admin/sponsors', adminSponsorRoutes);
+app.use('/api/user/sponsors', userSponsorRoutes);
+app.use('/api/admin/news', adminNewsRoutes);
+app.use('/api/user/news', userNewsRoutes);
 
 // Error Handler
 app.use(errorHandler);

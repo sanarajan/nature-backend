@@ -3,6 +3,7 @@ import { inject, injectable } from 'tsyringe';
 import { ILoginUseCase } from '../../application/interfaces/auth/ILoginUseCase';
 import { IRegisterUseCase } from '../../application/interfaces/auth/IRegisterUseCase';
 import { IVerifyEmailUseCase } from '../../application/interfaces/auth/IVerifyEmailUseCase';
+import { IResendOtpUseCase } from '../../application/interfaces/auth/IResendOtpUseCase';
 import { IForgotPasswordUseCase } from '../../application/interfaces/auth/IForgotPasswordUseCase';
 import { IResetPasswordUseCase } from '../../application/interfaces/auth/IResetPasswordUseCase';
 import { IAuthService } from '../../application/interfaces/auth/IAuthService';
@@ -17,6 +18,7 @@ export class AuthController {
         @inject('ILoginUseCase') private loginUseCase: ILoginUseCase,
         @inject('IRegisterUseCase') private registerUseCase: IRegisterUseCase,
         @inject('IVerifyEmailUseCase') private verifyEmailUseCase: IVerifyEmailUseCase,
+        @inject('IResendOtpUseCase') private resendOtpUseCase: IResendOtpUseCase,
         @inject('IForgotPasswordUseCase') private forgotPasswordUseCase: IForgotPasswordUseCase,
         @inject('IResetPasswordUseCase') private resetPasswordUseCase: IResetPasswordUseCase,
         @inject('IAuthService') private authService: IAuthService,
@@ -96,6 +98,18 @@ export class AuthController {
                 data: { user, accessToken },
             });
         } catch (error: any) {
+            if (error.requiresVerification) {
+                res.status(STATUS_CODES.FORBIDDEN).json({
+                    success: false,
+                    message: error.message,
+                    requiresVerification: true,
+                    data: {
+                        email: error.email,
+                        phoneNumber: error.phoneNumber
+                    }
+                });
+                return;
+            }
             res.status(STATUS_CODES.UNAUTHORIZED).json({
                 success: false,
                 message: error.message,
@@ -113,18 +127,48 @@ export class AuthController {
         });
     }
 
+    async verifyOtp(req: Request, res: Response): Promise<void> {
+        const email = req.body.email;
+        const rawOtp = req.body.otp !== undefined ? req.body.otp : req.body.token;
+
+        if (!email || rawOtp === undefined || rawOtp === null || rawOtp === '') {
+            res.status(STATUS_CODES.BAD_REQUEST).json({ success: false, message: 'Email and verification code are required' });
+            return;
+        }
+
+        const otp = typeof rawOtp === 'number' ? String(rawOtp).padStart(6, '0') : String(rawOtp).trim();
+
+        try {
+            const result = await this.verifyEmailUseCase.execute(email as string, otp);
+            res.status(STATUS_CODES.OK).json({
+                success: true,
+                message: result.message,
+            });
+        } catch (error: any) {
+            res.status(STATUS_CODES.BAD_REQUEST).json({
+                success: false,
+                message: error.message,
+            });
+        }
+    }
+
     async verifyEmail(req: Request, res: Response): Promise<void> {
-        const { email, token } = req.body;
-        if (!email || !token) {
-            res.status(STATUS_CODES.BAD_REQUEST).json({ success: false, message: 'Email and token are required' });
+        return this.verifyOtp(req, res);
+    }
+
+    async resendOtp(req: Request, res: Response): Promise<void> {
+        const { email } = req.body;
+        if (!email) {
+            res.status(STATUS_CODES.BAD_REQUEST).json({ success: false, message: 'Email is required' });
             return;
         }
 
         try {
-            const result = await this.verifyEmailUseCase.execute(email as string, token as string);
+            const result = await this.resendOtpUseCase.execute(email as string);
             res.status(STATUS_CODES.OK).json({
                 success: true,
                 message: result.message,
+                data: { resendCount: result.resendCount }
             });
         } catch (error: any) {
             res.status(STATUS_CODES.BAD_REQUEST).json({

@@ -46,6 +46,8 @@ import { EmailService } from '../services/EmailService';
 import { JwtService } from '../services/JwtService';
 import { PasswordService } from '../services/PasswordService';
 import { RazorpayService } from '../services/RazorpayService';
+import { WhatsAppService } from '../services/WhatsAppService';
+import { IWhatsAppService } from '../../domain/services/IWhatsAppService';
 
 // Register Infrastructure Dependencies
     container.registerSingleton<IUserRepository>('IUserRepository', UserRepository);
@@ -80,8 +82,20 @@ import { ICertificationRepository } from '../../domain/repositories/ICertificati
 import { CertificationRepository } from '../database/repositories/CertificationRepository';
     container.registerSingleton<ICertificationRepository>('ICertificationRepository', CertificationRepository);
 
+import { ISponsorRepository } from '../../domain/repositories/ISponsorRepository';
+import { SponsorRepository } from '../database/repositories/SponsorRepository';
+    container.registerSingleton<ISponsorRepository>('ISponsorRepository', SponsorRepository);
+
+import { INewsRepository } from '../../domain/repositories/INewsRepository';
+import { NewsRepository } from '../database/repositories/NewsRepository';
+    container.registerSingleton<INewsRepository>('INewsRepository', NewsRepository);
+
     // Services
     container.registerSingleton<EmailService>('IEmailService', EmailService);
     container.registerSingleton<JwtService>('IJwtService', JwtService);
     container.registerSingleton<PasswordService>('IPasswordService', PasswordService);
     container.registerSingleton<RazorpayService>('IRazorpayService', RazorpayService);
+    container.registerSingleton<IWhatsAppService>(
+    'IWhatsAppService',
+    WhatsAppService
+);

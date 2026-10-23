@@ -4,6 +4,7 @@ import { ICartRepository } from '../../../domain/repositories/ICartRepository';
 import { IAddressRepository } from '../../../domain/repositories/IAddressRepository';
 import { IReferralSettingRepository } from '../../../domain/repositories/IReferralSettingRepository';
 import { IRazorpayService } from '../../../domain/services/IRazorpayService';
+import { IEmailService } from '../../../domain/services/IEmailService';
 import { IShippingChargeRepository } from '../../../domain/repositories/IShippingChargeRepository';
 import { AppError } from '../../../shared/utils/AppError';
 import { STATUS_CODES } from '../../../shared/constants/statusCodes';
@@ -23,6 +24,7 @@ import cloudinary from '../../../infrastructure/config/cloudinary';
 
 import { SharedPricingService } from '../../services/SharedPricingService';
 import { UserLoyaltyUseCases } from '../user/UserLoyaltyUseCases';
+import { IWhatsAppService } from '../../../domain/services/IWhatsAppService';
 
 const roundTo2 = (num: number) => Math.round(num * 100) / 100;
 
@@ -30,7 +32,9 @@ const roundTo2 = (num: number) => Math.round(num * 100) / 100;
 export class PlaceOrderUseCase {
     constructor(
         @inject('IRazorpayService') private razorpayService: IRazorpayService,
-        @inject('ISharedPricingService') private sharedPricingService: SharedPricingService
+        @inject('ISharedPricingService') private sharedPricingService: SharedPricingService,
+        @inject('IEmailService') private emailService?: IEmailService,
+        @inject('IWhatsAppService') private whatsAppService?: IWhatsAppService
     ) {}
 
     async execute(userId: string, data: any, cookies: any) {
@@ -473,6 +477,80 @@ export class PlaceOrderUseCase {
             } catch (err) {
                 console.error('Failed to earn points during COD checkout:', err);
             }
+
+            if (this.emailService) {
+                const alreadySent = newOrder.statusHistory?.some((h: any) => h.status === 'Order Confirmation Email Sent');
+                if (!alreadySent) {
+                    try {
+                        const user = await UserModel.findById(userId);
+                        if (user && user.email) {
+                            const expectedDate = newOrder.orderedProducts?.find((p: any) => p.shippingDetails?.expectedDeliveryDate)?.shippingDetails?.expectedDeliveryDate;
+                            const deliveryEstimate = expectedDate ? new Date(expectedDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined;
+
+                            await this.emailService.sendOrderConfirmationEmail({
+                                email: user.email,
+                                customerName: user.displayName || (user as any).name || 'Customer',
+                                orderId: newOrder.orderId,
+                                orderDate: newOrder.createdAt || new Date(),
+                                items: newOrder.orderedProducts.map((p: any) => ({
+                                    productName: p.productName,
+                                    quantity: p.quantity,
+                                    price: p.finalPrice
+                                })),
+                                totalAmount: newOrder.totalAmount,
+                                shippingAddress: newOrder.address,
+                                deliveryEstimate,
+                                paymentMethod: 'Cash on Delivery'
+                            });
+
+                            newOrder.statusHistory.push({
+                                status: 'Order Confirmation Email Sent',
+                                timestamp: new Date(),
+                                updatedBy: 'System'
+                            });
+                            await newOrder.save();
+                        }
+                    } catch (emailErr) {
+                        console.error('Error sending COD order confirmation email:', emailErr);
+                    }
+                }
+            }
+            
+            if (this.whatsAppService) {
+                const alreadySent = newOrder.statusHistory?.some(
+                    (h: any) => h.status === 'Order Confirmation WhatsApp Sent'
+                );
+
+                if (!alreadySent) {
+                    try {
+                        const user = await UserModel.findById(userId);
+
+                        if (user?.phoneNumber) {
+                            await this.whatsAppService.sendOrderConfirmation(
+                                user.phoneNumber,
+                                user.displayName || (user as any).name || 'Customer',
+                                newOrder.orderId,
+                                newOrder.totalAmount,
+                                newOrder._id.toString()
+                            );
+
+                            newOrder.statusHistory.push({
+                                status: 'Order Confirmation WhatsApp Sent',
+                                timestamp: new Date(),
+                                updatedBy: 'System'
+                            });
+
+                            await newOrder.save();
+                        }
+                    } catch (whatsappErr) {
+                        console.error(
+                            'Error sending COD order confirmation WhatsApp:',
+                            whatsappErr
+                        );
+                    }
+                }
+            }
+
         }
 
         return {
@@ -487,7 +565,9 @@ export class PlaceOrderUseCase {
 @injectable()
 export class VerifyPaymentUseCase {
     constructor(
-        @inject('IRazorpayService') private razorpayService: IRazorpayService
+        @inject('IRazorpayService') private razorpayService: IRazorpayService,
+        @inject('IEmailService') private emailService?: IEmailService,
+         @inject('IWhatsAppService') private whatsAppService?: IWhatsAppService
     ) {}
 
     async execute(data: any) {
@@ -600,12 +680,90 @@ export class VerifyPaymentUseCase {
             await cart.save();
         }
 
+        if (this.emailService) {
+            const alreadySent = order.statusHistory?.some((h: any) => h.status === 'Order Confirmation Email Sent');
+            if (!alreadySent) {
+                try {
+                    const user = await UserModel.findById(order.userId);
+                    if (user && user.email) {
+                        const expectedDate = order.orderedProducts?.find((p: any) => p.shippingDetails?.expectedDeliveryDate)?.shippingDetails?.expectedDeliveryDate;
+                        const deliveryEstimate = expectedDate ? new Date(expectedDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined;
+
+                        await this.emailService.sendOrderConfirmationEmail({
+                            email: user.email,
+                            customerName: user.displayName || (user as any).name || 'Customer',
+                            orderId: order.orderId,
+                            orderDate: order.createdAt || new Date(),
+                            items: order.orderedProducts.map((p: any) => ({
+                                productName: p.productName,
+                                quantity: p.quantity,
+                                price: p.finalPrice
+                            })),
+                            totalAmount: order.totalAmount,
+                            shippingAddress: order.address,
+                            deliveryEstimate,
+                            paymentMethod: order.paymentMethod || 'Online'
+                        });
+
+                        order.statusHistory.push({
+                            status: 'Order Confirmation Email Sent',
+                            timestamp: new Date(),
+                            updatedBy: 'System'
+                        });
+                        await order.save();
+                    }
+                } catch (emailErr) {
+                    console.error('Error sending Online order confirmation email:', emailErr);
+                }
+            }
+        }
+
+        if (this.whatsAppService) {
+            const alreadySent = order.statusHistory?.some(
+                (h: any) => h.status === 'Order Confirmation WhatsApp Sent'
+            );
+
+            if (!alreadySent) {
+                try {
+                    const user = await UserModel.findById(order.userId);
+
+                    if (user?.phoneNumber) {
+                        await this.whatsAppService.sendOrderConfirmation(
+                            user.phoneNumber,
+                            user.displayName || (user as any).name || 'Customer',
+                            order.orderId,
+                            order.totalAmount,
+                            order._id.toString()
+                        );
+
+                        order.statusHistory.push({
+                            status: 'Order Confirmation WhatsApp Sent',
+                            timestamp: new Date(),
+                            updatedBy: 'System'
+                        });
+
+                        await order.save();
+                    }
+                } catch (whatsappErr) {
+                    console.error(
+                        'Error sending online order confirmation WhatsApp:',
+                        whatsappErr
+                    );
+                }
+            }
+        }
+
         return order;
     }
 }
 
 @injectable()
 export class HandleRazorpayWebhookUseCase {
+    constructor(
+        @inject('IEmailService') private emailService?: IEmailService,
+         @inject('IWhatsAppService') private whatsAppService?: IWhatsAppService
+    ) {}
+
     async execute(headers: any, body: any, rawBody: string) {
         const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'your_webhook_secret_here';
         const signature = headers['x-razorpay-signature'] as string;
@@ -670,6 +828,82 @@ export class HandleRazorpayWebhookUseCase {
                     cart.products = [];
                     await cart.save();
                 }
+
+                if (this.emailService) {
+                    const alreadySent = order.statusHistory?.some((h: any) => h.status === 'Order Confirmation Email Sent');
+                    if (!alreadySent) {
+                        try {
+                            const user = await UserModel.findById(order.userId);
+                            if (user && user.email) {
+                                const expectedDate = order.orderedProducts?.find((p: any) => p.shippingDetails?.expectedDeliveryDate)?.shippingDetails?.expectedDeliveryDate;
+                                const deliveryEstimate = expectedDate ? new Date(expectedDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined;
+
+                                await this.emailService.sendOrderConfirmationEmail({
+                                    email: user.email,
+                                    customerName: user.displayName || (user as any).name || 'Customer',
+                                    orderId: order.orderId,
+                                    orderDate: order.createdAt || new Date(),
+                                    items: order.orderedProducts.map((p: any) => ({
+                                        productName: p.productName,
+                                        quantity: p.quantity,
+                                        price: p.finalPrice
+                                    })),
+                                    totalAmount: order.totalAmount,
+                                    shippingAddress: order.address,
+                                    deliveryEstimate,
+                                    paymentMethod: order.paymentMethod || 'Online'
+                                });
+
+                                order.statusHistory.push({
+                                    status: 'Order Confirmation Email Sent',
+                                    timestamp: new Date(),
+                                    updatedBy: 'System'
+                                });
+                                await order.save();
+                            }
+                        } catch (emailErr) {
+                            console.error('Error sending Webhook order confirmation email:', emailErr);
+                        }
+                    }
+                }
+
+                
+                if (this.whatsAppService) {
+                    const alreadySent = order.statusHistory?.some(
+                        (h: any) => h.status === 'Order Confirmation WhatsApp Sent'
+                    );
+                   
+
+                    if (!alreadySent) {
+                        try {
+                            const user = await UserModel.findById(order.userId);
+
+                            if (user?.phoneNumber) {
+                                await this.whatsAppService.sendOrderConfirmation(
+                                    user.phoneNumber,
+                                    user.displayName || (user as any).name || 'Customer',
+                                    order.orderId,
+                                    order.totalAmount,
+                                    order._id.toString()
+                                );
+
+                                order.statusHistory.push({
+                                    status: 'Order Confirmation WhatsApp Sent',
+                                    timestamp: new Date(),
+                                    updatedBy: 'System'
+                                });
+
+                                await order.save();
+                            }
+                        } catch (whatsappErr) {
+                            console.error(
+                                'Error sending webhook order confirmation WhatsApp:',
+                                whatsappErr
+                            );
+                        }
+                    }
+                }
+
             }
         } else if (event === 'payment.failed') {
             const entity = payload.payment.entity;

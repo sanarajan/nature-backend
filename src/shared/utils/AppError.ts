@@ -2,11 +2,13 @@ import { STATUS_CODES } from '../constants/statusCodes';
 
 export class AppError extends Error {
   public statusCode: number;
+  public status: number;
   public isOperational: boolean;
 
   constructor(message: string, statusCode: number, isOperational = true) {
     super(message);
     this.statusCode = statusCode;
+    this.status = statusCode;
     this.isOperational = isOperational;
     Error.captureStackTrace(this, this.constructor);
   }

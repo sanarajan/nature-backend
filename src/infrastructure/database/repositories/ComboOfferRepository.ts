@@ -82,4 +82,21 @@ export class ComboOfferRepository implements IComboOfferRepository {
         }
         return null;
     }
+    
+async findLatestActiveComboOffer(): Promise<any | null> {
+    const now = new Date();
+
+    return await ComboOfferModel.findOne({
+        status: true,
+        isDeleted: { $ne: true },
+        startDate: { $lte: now },
+        endDate: { $gte: now },
+    })
+        .populate(
+            'products.productId',
+            'productName price sku stock categoryId isActive keyIngredients otherIngredients'
+        )
+        .sort({ createdAt: -1 });
+}
+
 }

@@ -19,4 +19,6 @@ export const env = {
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
+ ENABLE_MULTI_COMBO_PRICING: process.env.ENABLE_MULTI_COMBO_PRICING === 'true',
+  WHATSAPP_API_KEY: process.env.WHATSAPP_API_KEY || '',
 };

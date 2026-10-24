@@ -330,7 +330,7 @@ export class EmailService implements IEmailService {
 
     async sendContactEmail(name: string, email: string, preference: string, message: string): Promise<void> {
         const mailOptions = {
-            from: process.env.EMAIL_FROM || 'noreply@naturalayam.com',
+            from: process.env.EMAIL_FROM || 'sales@naturalayam.com',
             to: 'sales@naturalayam.com',
             replyTo: email,
             subject: 'New Contact Enquiry - Naturalayam',

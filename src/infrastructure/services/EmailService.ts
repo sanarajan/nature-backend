@@ -19,10 +19,10 @@ export class EmailService implements IEmailService {
     }
 
     async sendVerificationEmail(email: string, otp: string): Promise<void> {
-        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const clientUrl = process.env.CLIENT_URL || 'https://www.naturalayam.com/';
         const safeOtp = typeof otp === 'number' ? String(otp).padStart(6, '0') : String(otp || '').trim();
         const mailOptions = {
-            from: process.env.EMAIL_FROM || 'noreply@nature.com',
+            from: process.env.EMAIL_FROM || 'sales@naturalayam.com',
             to: email,
             subject: 'Your Naturalayam Verification OTP',
             html: `
@@ -68,7 +68,7 @@ export class EmailService implements IEmailService {
     }
 
     async sendWelcomeWithReferralEmail(email: string, referralId: string, offerPercentage: number, joiningDiscount: number): Promise<void> {
-        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const clientUrl = process.env.CLIENT_URL || 'https://www.naturalayam.com';
         //  <div style="font-family: Arial, sans-serif; padding: 20px;">
         //             <h2>Welcome to Naturalayam!</h2>
         //             <p>Your email has been successfully verified.</p>
@@ -79,7 +79,7 @@ export class EmailService implements IEmailService {
         //            <a href="${clientUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px;">Start Shopping</a>
         //         </div>
         const mailOptions = {
-            from: process.env.EMAIL_FROM || 'noreply@nature.com',
+            from: process.env.EMAIL_FROM || 'sales@naturalayam.com',
             to: email,
             subject: 'Welcome to Naturalayam - Your registration is successful!',
             html: `
@@ -118,7 +118,7 @@ export class EmailService implements IEmailService {
         ` : `<p>Your package is on its way. Please contact the shipping agency for more details.</p>`;
 
         const mailOptions = {
-            from: process.env.EMAIL_FROM || 'noreply@nature.com',
+            from: process.env.EMAIL_FROM || 'sales@naturalayam.com',
             to: email,
             subject: `Your order item has been shipped - ${orderId}`,
             html: `
@@ -158,11 +158,11 @@ export class EmailService implements IEmailService {
     }
 
     async sendInfluencerApprovalEmail(email: string, userName: string): Promise<void> {
-        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const clientUrl = process.env.CLIENT_URL || 'https://www.naturalayam.com';
         const dashboardUrl = `${clientUrl}/account/influencer`;
 
         const mailOptions = {
-            from: process.env.EMAIL_FROM || 'noreply@nature.com',
+            from: process.env.EMAIL_FROM || 'sales@naturalayam.com',
             to: email,
             subject: 'Your Naturalayam Influencer Request Has Been Approved!',
             html: `
@@ -203,7 +203,7 @@ export class EmailService implements IEmailService {
         ` : '';
 
         const mailOptions = {
-            from: process.env.EMAIL_FROM || 'noreply@nature.com',
+            from: process.env.EMAIL_FROM || 'sales@naturalayam.com',
             to: email,
             subject: 'Update on Your Naturalayam Influencer Request',
             html: `
@@ -236,11 +236,11 @@ export class EmailService implements IEmailService {
     }
 
     async sendStaffCredentialsEmail(email: string, name: string, password: string): Promise<void> {
-        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const clientUrl = process.env.CLIENT_URL || 'https://www.naturalayam.com/';
         const loginUrl = `${clientUrl}/admin`;
 
         const mailOptions = {
-            from: process.env.EMAIL_FROM || 'noreply@naturalayam.com',
+            from: process.env.EMAIL_FROM || 'sales@naturalayam.com',
             to: email,
             subject: 'Naturalayam Staff Account Registered',
             html: `
@@ -291,7 +291,7 @@ export class EmailService implements IEmailService {
         const resetLink = `${clientUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
         const mailOptions = {
-            from: process.env.EMAIL_FROM || 'noreply@nature.com',
+            from: process.env.EMAIL_FROM || 'sales@naturalayam.com',
             to: email,
             subject: 'Password Reset Request - Naturalayam',
             html: `

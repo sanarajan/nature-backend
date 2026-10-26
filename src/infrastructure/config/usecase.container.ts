@@ -291,4 +291,8 @@ import { UserNewsUseCases } from '../../application/usecases/user/UserNewsUseCas
 container.registerSingleton(AdminNewsUseCases);
 container.registerSingleton(UserNewsUseCases);
 
+// Blog UseCases
+import { AdminBlogUseCases } from '../../application/usecases/admin/AdminBlogUseCases';
+container.registerSingleton(AdminBlogUseCases);
+
 

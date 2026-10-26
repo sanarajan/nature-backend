@@ -90,6 +90,10 @@ import { INewsRepository } from '../../domain/repositories/INewsRepository';
 import { NewsRepository } from '../database/repositories/NewsRepository';
     container.registerSingleton<INewsRepository>('INewsRepository', NewsRepository);
 
+import { IBlogRepository } from '../../domain/repositories/IBlogRepository';
+import { BlogRepository } from '../database/repositories/BlogRepository';
+    container.registerSingleton<IBlogRepository>('IBlogRepository', BlogRepository);
+
     // Services
     container.registerSingleton<EmailService>('IEmailService', EmailService);
     container.registerSingleton<JwtService>('IJwtService', JwtService);

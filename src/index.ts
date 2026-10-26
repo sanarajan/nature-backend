@@ -48,6 +48,8 @@ import userCertificationRoutes from './interface/routes/user/userCertificationRo
 import adminSponsorRoutes from './interface/routes/admin/adminSponsorRoutes';
 import userSponsorRoutes from './interface/routes/user/userSponsorRoutes';
 import adminNewsRoutes from './interface/routes/admin/adminNewsRoutes';
+import adminBlogRoutes from './interface/routes/admin/adminBlogRoutes';
+import userBlogRoutes from './interface/routes/user/userBlogRoutes';
 import userNewsRoutes from './interface/routes/user/userNewsRoutes';
 
 // Exported models to ensure registration
@@ -78,6 +80,7 @@ import './infrastructure/database/models/SpinHistoryModel';
 import './infrastructure/database/models/CertificationModel';
 import './infrastructure/database/models/SponsorModel';
 import './infrastructure/database/models/NewsModel';
+import './infrastructure/database/models/BlogModel';
 
 const app = express();
 
@@ -154,6 +157,8 @@ app.use('/api/user/certifications', userCertificationRoutes);
 app.use('/api/admin/sponsors', adminSponsorRoutes);
 app.use('/api/user/sponsors', userSponsorRoutes);
 app.use('/api/admin/news', adminNewsRoutes);
+app.use('/api/admin/blogs', adminBlogRoutes);
+app.use('/api/user/blogs', userBlogRoutes);
 app.use('/api/user/news', userNewsRoutes);
 
 // Error Handler

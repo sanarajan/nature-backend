@@ -18,21 +18,38 @@ export class GetCartUseCase implements IGetCartUseCase {
     constructor(
         @inject('ICartRepository') private cartRepository: ICartRepository,
         @inject('ISharedPricingService') private sharedPricingService: SharedPricingService
-    ) {}
+    ) { }
 
-    async execute(userId: string, influencerRef?: string): Promise<any> {
-        let cart = await this.cartRepository.findByUserId(userId);
-        if (!cart) {
-            cart = await this.cartRepository.createCart(userId);
-        } else {
-            const initialLength = cart.products.length;
-            cart.products = cart.products.filter((item: any) => item.product != null);
-            if (cart.products.length !== initialLength) {
-                await this.cartRepository.save(cart);
-            }
+   
+async execute(userId: string, influencerRef?: string): Promise<any> {
+    let cart = await this.cartRepository.findByUserId(userId);
+    if (!cart) {
+        cart = await this.cartRepository.createCart(userId);
+    } else {
+        const initialLength = cart.products.length;
+        cart.products = cart.products.filter((item: any) => item.product != null);
+        if (cart.products.length !== initialLength) {
+            await this.cartRepository.save(cart);
         }
-        return await this.sharedPricingService.calculate(cart, { userId, influencerRef });
     }
+
+    if (!cart || cart.products.length === 0) {
+        return {
+            products: [],
+            appliedComboOffers: [],
+            pricing: {
+                totalMRP: 0,
+                subtotal: 0,
+                totalDiscount: 0,
+                deliveryCharge: 0,
+                finalPrice: 0
+            }
+        };
+    }
+
+    return await this.sharedPricingService.calculate(cart, { userId, influencerRef });
+}
+
 }
 
 @injectable()
@@ -40,7 +57,7 @@ export class ToggleCartItemUseCase implements IToggleCartItemUseCase {
     constructor(
         @inject('ICartRepository') private cartRepository: ICartRepository,
         @inject('ISharedPricingService') private sharedPricingService: SharedPricingService
-    ) {}
+    ) { }
 
     async execute(userId: string, productId: string, quantity: number = 1, influencerRef?: string): Promise<any> {
         if (!productId) throw new ValidationError('Product ID is required');
@@ -52,7 +69,7 @@ export class ToggleCartItemUseCase implements IToggleCartItemUseCase {
 
         const productIndex = cart.products.findIndex((p: any) => p.product._id.toString() === productId);
         const product = await ProductModel.findById(productId);
-        
+
         if (!product || product.isActive === false) {
             throw new ValidationError('This product is currently unavailable.');
         }
@@ -84,7 +101,7 @@ export class UpdateCartItemQuantityUseCase implements IUpdateCartItemQuantityUse
     constructor(
         @inject('ICartRepository') private cartRepository: ICartRepository,
         @inject('ISharedPricingService') private sharedPricingService: SharedPricingService
-    ) {}
+    ) { }
 
     async execute(userId: string, productId: string, quantity: number, influencerRef?: string): Promise<any> {
         if (!productId || quantity === undefined) throw new ValidationError('Invalid product details');
@@ -101,10 +118,10 @@ export class UpdateCartItemQuantityUseCase implements IUpdateCartItemQuantityUse
             if (!product || product.isActive === false) {
                 throw new ValidationError('This product is currently unavailable.');
             }
-            
+
             const requestedQuantity = Number(quantity);
             const currentQuantity = cart.products[productIndex].quantity;
-            
+
             if (requestedQuantity > currentQuantity) {
                 if (product.stock <= 0) {
                     throw new ValidationError('This product is currently out of stock.');
@@ -113,7 +130,7 @@ export class UpdateCartItemQuantityUseCase implements IUpdateCartItemQuantityUse
                     throw new ValidationError(`Only ${product.stock} item(s) are currently available.`);
                 }
             }
-            
+
             cart.products[productIndex].quantity = requestedQuantity;
             await this.cartRepository.save(cart);
             const populatedCart = await this.cartRepository.findByUserId(userId);
@@ -129,16 +146,38 @@ export class RemoveCartItemUseCase implements IRemoveCartItemUseCase {
     constructor(
         @inject('ICartRepository') private cartRepository: ICartRepository,
         @inject('ISharedPricingService') private sharedPricingService: SharedPricingService
-    ) {}
+    ) { }
 
     async execute(userId: string, productId: string, influencerRef?: string): Promise<any> {
+        console.log('[RemoveCartItemUseCase] EXECUTE STARTED');
         let cart = await this.cartRepository.findByUserId(userId);
         if (!cart) throw new NotFoundError('Cart not found');
 
+
         cart.products = cart.products.filter((p: any) => p.product._id.toString() !== productId);
         await this.cartRepository.save(cart);
+
         const populatedCart = await this.cartRepository.findByUserId(userId);
+console.log(
+    '[RemoveCartItemUseCase] Cart after removal:',
+    populatedCart?.products?.length
+);
+        if (!populatedCart || populatedCart.products.length === 0) {
+            return {
+                products: [],
+                appliedComboOffers: [],
+                pricing: {
+                    totalMRP: 0,
+                    subtotal: 0,
+                    totalDiscount: 0,
+                    deliveryCharge: 0,
+                    finalPrice: 0
+                }
+            };
+        }
+
         return await this.sharedPricingService.calculate(populatedCart, { userId, influencerRef });
+
     }
 }
 
@@ -147,11 +186,11 @@ export class SyncOfflineCartUseCase implements ISyncOfflineCartUseCase {
     constructor(
         @inject('ICartRepository') private cartRepository: ICartRepository,
         @inject('ISharedPricingService') private sharedPricingService: SharedPricingService
-    ) {}
+    ) { }
 
     async execute(userId: string, cartItems: any[], influencerRef?: string, isAtomicCombo?: boolean): Promise<any> {
         if (!cartItems || !Array.isArray(cartItems)) throw new ValidationError('Invalid cart items format');
-        
+
         let cart = await this.cartRepository.findByUserId(userId);
         if (!cart) {
             cart = await this.cartRepository.createCart(userId);
@@ -171,7 +210,7 @@ export class SyncOfflineCartUseCase implements ISyncOfflineCartUseCase {
                 }
                 const existingItem = cart.products.find((p: any) => p.product._id.toString() === productId);
                 const currentQty = existingItem ? existingItem.quantity : 0;
-                
+
                 if (product.stock <= 0) {
                     throw new ValidationError('One or more products in this combo are out of stock.');
                 }
@@ -183,7 +222,7 @@ export class SyncOfflineCartUseCase implements ISyncOfflineCartUseCase {
 
         for (const item of cartItems) {
             if (!item.product || !item.quantity) continue;
-            
+
             const existingItem = cart.products.find((p: any) => p.product._id.toString() === item.product);
             const product = await ProductModel.findById(item.product);
             if (existingItem) {
@@ -210,7 +249,7 @@ export class SyncOfflineCartUseCase implements ISyncOfflineCartUseCase {
 export class CalculateCartTotalsUseCase implements ICalculateCartTotalsUseCase {
     constructor(
         @inject('ISharedPricingService') private sharedPricingService: SharedPricingService
-    ) {}
+    ) { }
 
     async execute(products: any[]): Promise<any> {
         if (!products || !Array.isArray(products)) {
@@ -218,7 +257,7 @@ export class CalculateCartTotalsUseCase implements ICalculateCartTotalsUseCase {
         }
 
         const productIds = products.map(p => (p.product?._id || p.product)?.toString()).filter(id => id && mongoose.isValidObjectId(id));
-        
+
         const productDocs = await ProductModel.find({ _id: { $in: productIds } })
             .populate("categoryId", "categoryName _id")
             .populate("subcategoryId", "subcategoryName _id")
@@ -226,15 +265,15 @@ export class CalculateCartTotalsUseCase implements ICalculateCartTotalsUseCase {
 
         const cartItemsForCalc = products.map(p => {
             const pId = (p.product?._id || p.product)?.toString();
-            return { 
-                product: productDocs.find(d => d._id.toString() === pId), 
-                quantity: Number(p.quantity) || 1 
+            return {
+                product: productDocs.find(d => d._id.toString() === pId),
+                quantity: Number(p.quantity) || 1
             };
         });
 
         const cartData = {
             products: cartItemsForCalc,
-            toObject: function() { return this; }
+            toObject: function () { return this; }
         };
 
         return await this.sharedPricingService.calculate(cartData as any, {});

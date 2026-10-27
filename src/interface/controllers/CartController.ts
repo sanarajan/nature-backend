@@ -62,9 +62,12 @@ export class CartController {
             const userId = (req as any).user.id;
             const influencerRef = req.cookies?.influencer_ref;
             const productId = req.params.productId as string;
+             console.log('[CartController] DELETE cart called:', { userId, productId });
             const calculatedCart = await this.removeCartItemUseCase.execute(userId, productId, influencerRef);
             res.status(STATUS_CODES.OK).json({ success: true, message: 'Product removed from cart', data: calculatedCart });
         } catch (error: any) {
+                    console.error('[CartController] DELETE cart error:', error);
+
             res.status(error.statusCode || STATUS_CODES.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message || 'Error removing item from cart' });
         }
     }

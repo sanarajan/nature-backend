@@ -51,4 +51,8 @@ export class RazorpayService implements IRazorpayService {
     public async fetchPayment(paymentId: string): Promise<any> {
         return this.razorpay.payments.fetch(paymentId);
     }
+
+    public async fetchOrder(orderId: string): Promise<any> {
+        return this.razorpay.orders.fetch(orderId);
+    }
 }

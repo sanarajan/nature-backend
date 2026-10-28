@@ -43,6 +43,7 @@ import { errorHandler } from './middleware/errorMiddleware';
 import { startCommissionCron } from './infrastructure/jobs/CommissionCron';
 import { startInfluencerCommissionCron } from './infrastructure/cron/InfluencerCommissionCron';
 import { startNaturePointsExpiryCron } from './infrastructure/cron/NaturePointsExpiryCron';
+import { startOrderExpiryCron } from './infrastructure/cron/OrderExpiryCron';
 import adminCertificationRoutes from './interface/routes/admin/adminCertificationRoutes';
 import userCertificationRoutes from './interface/routes/user/userCertificationRoutes';
 import adminSponsorRoutes from './interface/routes/admin/adminSponsorRoutes';
@@ -173,4 +174,5 @@ app.listen(PORT, () => {
     startCommissionCron();
     startInfluencerCommissionCron();
     startNaturePointsExpiryCron();
+    startOrderExpiryCron();
 });

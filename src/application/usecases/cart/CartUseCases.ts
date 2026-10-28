@@ -10,8 +10,47 @@ import {
 } from '../../interfaces/user/ICartUseCases';
 import { ICartRepository } from '../../../domain/repositories/ICartRepository';
 import { ProductModel } from '../../../infrastructure/database/models/ProductModel';
+import { OrderModel } from '../../../infrastructure/database/models/OrderModel';
 import { NotFoundError, ValidationError } from '../../../shared/utils/AppError';
 import { SharedPricingService } from '../../services/SharedPricingService';
+
+const checkAndEnforcePendingOrderCartProtection = async (userId: string) => {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Reject adding new items if user has an active unpaid pending online order (< 24h)
+    const blockingOrder = await OrderModel.findOne({
+        userId,
+        paymentMethod: { $ne: 'COD' },
+        globalOrderStatus: 'PENDING',
+        paymentStatus: { $in: ['Pending', 'Failed'] },
+        createdAt: { $gt: cutoff }
+    });
+
+    if (blockingOrder) {
+        throw new ValidationError('You have an unpaid pending order. Please go to My Orders and retry payment or cancel your pending order before adding new products.');
+    }
+
+    // Auto-expire any stale unpaid pending order (>= 24h) so it does not block the cart
+    const staleOrder = await OrderModel.findOne({
+        userId,
+        paymentMethod: { $ne: 'COD' },
+        globalOrderStatus: 'PENDING',
+        paymentStatus: { $in: ['Pending', 'Failed'] },
+        createdAt: { $lte: cutoff }
+    });
+
+    if (staleOrder) {
+        staleOrder.globalOrderStatus = 'Expired';
+        staleOrder.paymentStatus = 'Expired';
+        staleOrder.orderedProducts.forEach((p: any) => p.orderStatus = 'Expired');
+        staleOrder.statusHistory.push({
+            status: 'Order Expired (24 hours unpaid)',
+            timestamp: new Date(),
+            updatedBy: 'System'
+        });
+        await staleOrder.save();
+    }
+};
 
 @injectable()
 export class GetCartUseCase implements IGetCartUseCase {
@@ -61,6 +100,8 @@ export class ToggleCartItemUseCase implements IToggleCartItemUseCase {
 
     async execute(userId: string, productId: string, quantity: number = 1, influencerRef?: string): Promise<any> {
         if (!productId) throw new ValidationError('Product ID is required');
+
+        await checkAndEnforcePendingOrderCartProtection(userId);
 
         let cart = await this.cartRepository.findByUserId(userId);
         if (!cart) {
@@ -190,6 +231,8 @@ export class SyncOfflineCartUseCase implements ISyncOfflineCartUseCase {
 
     async execute(userId: string, cartItems: any[], influencerRef?: string, isAtomicCombo?: boolean): Promise<any> {
         if (!cartItems || !Array.isArray(cartItems)) throw new ValidationError('Invalid cart items format');
+
+        await checkAndEnforcePendingOrderCartProtection(userId);
 
         let cart = await this.cartRepository.findByUserId(userId);
         if (!cart) {

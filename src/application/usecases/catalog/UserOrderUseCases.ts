@@ -19,6 +19,7 @@ import { SpinHistoryModel } from '../../../infrastructure/database/models/SpinHi
 import { OfferModel } from '../../../infrastructure/database/models/OfferModel';
 import { ComboOfferModel } from '../../../infrastructure/database/models/ComboOfferModel';
 import { ShippingChargeModel } from '../../../infrastructure/database/models/ShippingChargeModel';
+import { ProductModel } from '../../../infrastructure/database/models/ProductModel';
 import crypto from 'crypto';
 import cloudinary from '../../../infrastructure/config/cloudinary';
 
@@ -579,6 +580,10 @@ export class VerifyPaymentUseCase {
             throw new AppError('Order not found', STATUS_CODES.NOT_FOUND);
         }
 
+        if (order.paymentStatus === 'Completed') {
+            return order;
+        }
+
         const shasum = crypto.createHmac("sha256", secret);
         shasum.update(`${razorpayOrderId}|${razorpayPaymentId}`);
         const digest = shasum.digest("hex");
@@ -595,13 +600,51 @@ export class VerifyPaymentUseCase {
             throw new AppError("Payment verification failed due to signature mismatch", STATUS_CODES.BAD_REQUEST);
         }
 
-        const payment: any = await this.razorpayService.fetchPayment(razorpayPaymentId);
+        // Validate that razorpayOrderId belongs to this ecommerce order (supporting retry attempts)
+        let isOrderAttemptValid = order.razorpayOrderId === razorpayOrderId;
+        if (!isOrderAttemptValid && razorpayOrderId) {
+            try {
+                const rzpOrder = typeof (this.razorpayService as any).fetchOrder === 'function'
+                    ? await (this.razorpayService as any).fetchOrder(razorpayOrderId)
+                    : await (this.razorpayService as any).razorpay?.orders?.fetch(razorpayOrderId);
+                if (rzpOrder && rzpOrder.receipt === order.orderId) {
+                    isOrderAttemptValid = true;
+                }
+            } catch (rzpOrderErr) {
+                console.error('[VerifyPayment] Error fetching Razorpay order attempt details:', rzpOrderErr);
+            }
+        }
 
+        if (!isOrderAttemptValid) {
+            throw new AppError("Payment order reference does not belong to this ecommerce order", STATUS_CODES.BAD_REQUEST);
+        }
+
+        const payment: any = await this.razorpayService.fetchPayment(razorpayPaymentId);
+        if (!payment) {
+            throw new AppError("Unable to retrieve payment details from gateway", STATUS_CODES.BAD_REQUEST);
+        }
+
+        // Verify that fetched payment's order_id matches the submitted Razorpay order ID
+        if (!payment.order_id || payment.order_id !== razorpayOrderId) {
+            throw new AppError("Payment does not correspond to the submitted Razorpay order attempt", STATUS_CODES.BAD_REQUEST);
+        }
+
+        // Verify payment is captured/successful
         if (payment.status !== "captured") {
             order.paymentStatus = (payment.status === 'failed' ? 'Failed' : 'Pending') as any;
             order.razorpayPaymentId = razorpayPaymentId;
             await order.save();
             throw new AppError(`Payment was not successful (Status: ${payment.status})`, STATUS_CODES.BAD_REQUEST);
+        }
+
+        // Verify captured payment amount and currency match expected order total (paise convention for INR)
+        const expectedAmount = Math.round(order.totalAmount * 100);
+        if (typeof payment.amount === 'number' && payment.amount !== expectedAmount) {
+            throw new AppError(`Payment amount mismatch: expected ₹${order.totalAmount.toFixed(2)}, received ₹${(payment.amount / 100).toFixed(2)}`, STATUS_CODES.BAD_REQUEST);
+        }
+
+        if (payment.currency && payment.currency.toUpperCase() !== "INR") {
+            throw new AppError(`Payment currency mismatch: expected INR, received ${payment.currency}`, STATUS_CODES.BAD_REQUEST);
         }
 
         order.razorpayPaymentId = razorpayPaymentId;
@@ -766,7 +809,7 @@ export class HandleRazorpayWebhookUseCase {
 
     async execute(headers: any, body: any, rawBody: string) {
         const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'your_webhook_secret_here';
-        const signature = headers['x-razorpay-signature'] as string;
+        const signature = (headers['x-razorpay-signature'] || headers['X-Razorpay-Signature']) as string;
 
         const expectedSignature = crypto
             .createHmac('sha256', secret)
@@ -784,8 +827,24 @@ export class HandleRazorpayWebhookUseCase {
             const entity = payload.payment?.entity || payload.order?.entity;
             const razorpayOrderId = entity.order_id || entity.id;
 
-            const order = await OrderModel.findOne({ razorpayOrderId: razorpayOrderId });
-            if (order && order.paymentStatus === 'Pending') {
+            let order = await OrderModel.findOne({ razorpayOrderId: razorpayOrderId });
+            if (!order && entity.receipt) {
+                // If order.razorpayOrderId was updated to a newer retry attempt, match by receipt
+                order = await OrderModel.findOne({ orderId: entity.receipt });
+            }
+
+            if (order && (order.paymentStatus === 'Pending' || order.paymentStatus === 'Expired')) {
+                // Validate amount and currency before completing order
+                const expectedAmount = Math.round(order.totalAmount * 100);
+                if (typeof entity.amount === 'number' && entity.amount !== expectedAmount) {
+                    console.error(`[WEBHOOK] Amount mismatch for order ${order.orderId}: expected ${expectedAmount}, received ${entity.amount}`);
+                    return;
+                }
+                if (entity.currency && entity.currency.toUpperCase() !== 'INR') {
+                    console.error(`[WEBHOOK] Currency mismatch for order ${order.orderId}: received ${entity.currency}`);
+                    return;
+                }
+
                 order.paymentStatus = 'Completed';
                 order.globalOrderStatus = 'Order Placed';
                 order.razorpayPaymentId = entity.id;
@@ -971,6 +1030,29 @@ export class RequestCancellationUseCase {
         const restrictedStatuses = ['SHIPPED', 'PARTIALLY_SHIPPED', 'DELIVERED', 'PARTIALLY_DELIVERED', 'COMPLETED', 'RETURNED', 'PARTIALLY_RETURNED'];
         if (restrictedStatuses.includes(order.globalOrderStatus)) {
             throw new AppError('Order cannot be cancelled as it has already been shipped or processed further.', STATUS_CODES.BAD_REQUEST);
+        }
+
+        const isUnpaidOnlinePending = order.paymentMethod !== 'COD' && 
+            order.globalOrderStatus === 'PENDING' && 
+            ['Pending', 'Failed'].includes(order.paymentStatus || 'Pending');
+
+        if (isUnpaidOnlinePending) {
+            order.orderedProducts.forEach((item: any) => {
+                item.orderStatus = 'Cancelled';
+                if (!item.cancellation) item.cancellation = {};
+                item.cancellation.reason = reason || 'User cancelled unpaid order';
+                item.cancellation.cancelDate = new Date();
+                item.cancelledBy = 'User';
+            });
+            order.globalOrderStatus = 'Cancelled';
+            order.paymentStatus = 'Cancelled';
+            order.statusHistory.push({
+                status: 'Order Cancelled by Customer (Unpaid Online Order)',
+                timestamp: new Date(),
+                updatedBy: 'Customer'
+            });
+            await order.save();
+            return order;
         }
 
         let updated = false;
@@ -1249,3 +1331,83 @@ export class GetShippingChargeUseCase {
         return charge;
     }
 }
+
+@injectable()
+export class RetryPaymentUseCase {
+    constructor(
+        @inject('IRazorpayService') private razorpayService: IRazorpayService
+    ) {}
+
+    async execute(userId: string, orderId: string) {
+        const order = await OrderModel.findOne({ _id: orderId, userId });
+        if (!order) {
+            throw new AppError('Order not found', STATUS_CODES.NOT_FOUND);
+        }
+
+        if (order.paymentMethod === 'COD') {
+            throw new AppError('Cannot retry payment for a Cash on Delivery order.', STATUS_CODES.BAD_REQUEST);
+        }
+
+        if (order.paymentStatus === 'Completed') {
+            throw new AppError('Payment has already been completed for this order.', STATUS_CODES.BAD_REQUEST);
+        }
+
+        if (['Cancelled', 'CANCELLED'].includes(order.globalOrderStatus) || order.paymentStatus === 'Cancelled') {
+            throw new AppError('Cannot retry payment for a cancelled order.', STATUS_CODES.BAD_REQUEST);
+        }
+
+        if (order.globalOrderStatus === 'Expired' || order.paymentStatus === 'Expired') {
+            throw new AppError('This order has expired. Please place a new order.', STATUS_CODES.BAD_REQUEST);
+        }
+
+        const isExpiredByTime = Date.now() - new Date(order.createdAt).getTime() > 24 * 60 * 60 * 1000;
+        if (isExpiredByTime) {
+            order.globalOrderStatus = 'Expired';
+            order.paymentStatus = 'Expired';
+            order.orderedProducts.forEach((p: any) => p.orderStatus = 'Expired');
+            order.statusHistory.push({
+                status: 'Order Expired (24 hours unpaid)',
+                timestamp: new Date(),
+                updatedBy: 'System'
+            });
+            await order.save();
+            throw new AppError('This order has expired after 24 hours. Please place a new order.', STATUS_CODES.BAD_REQUEST);
+        }
+
+        if (order.globalOrderStatus !== 'PENDING') {
+            throw new AppError('Order is not in an eligible pending state for payment retry.', STATUS_CODES.BAD_REQUEST);
+        }
+
+        // Validate stock availability for all items in order
+        for (const item of order.orderedProducts) {
+            const product = await ProductModel.findById(item.productId);
+            if (!product || product.isActive === false) {
+                throw new AppError(`${item.productName} is currently unavailable.`, STATUS_CODES.BAD_REQUEST);
+            }
+            if (product.stock <= 0) {
+                throw new AppError(`${item.productName} is currently out of stock.`, STATUS_CODES.BAD_REQUEST);
+            }
+            if (item.quantity > product.stock) {
+                throw new AppError(`Only ${product.stock} item(s) of ${item.productName} are currently available.`, STATUS_CODES.BAD_REQUEST);
+            }
+        }
+
+        // Create a fresh Razorpay order for this retry attempt
+        const razorpayOrder = await this.razorpayService.createOrder(order.totalAmount, order.orderId);
+        order.razorpayOrderId = razorpayOrder.id;
+        order.statusHistory.push({
+            status: 'Payment Retry Initiated',
+            timestamp: new Date(),
+            updatedBy: 'Customer'
+        });
+        await order.save();
+
+        return {
+            order,
+            razorpayOrderId: order.razorpayOrderId,
+            amount: Math.round(order.totalAmount * 100),
+            key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder'
+        };
+    }
+}
+

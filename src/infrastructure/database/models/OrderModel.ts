@@ -337,17 +337,19 @@ const calculateGlobalStatusLogic = (products: IOrderedProduct[]) => {
     const someEqual = (status: string) => statuses.some(s => s === status);
 
     // Cases 1-4, 8, 10
-    if (allEqual('Order Placed') || allEqual('Pending')) return 'Order Placed';
+    if (allEqual('Pending')) return 'PENDING';
+    if (allEqual('Order Placed')) return 'Order Placed';
     if (allEqual('Processing')) return 'Processed';
     if (allEqual('Shipped')) return 'Shipped';
     if (allEqual('Out for Delivery')) return 'Out for Delivery';
     if (allEqual('Delivered')) return 'Delivered';
     if (allEqual('Cancelled')) return 'Cancelled';
+    if (allEqual('Expired')) return 'Expired';
     if (allEqual('Return Approved')) return 'Return Approved';
     if (allEqual('Returned') || allEqual('Return')) return 'Returned';
 
-    // Case 12: All products are either Returned or Cancelled
-    const isTerminal = (s: string) => s === 'Returned' || s === 'Return' || s === 'Cancelled';
+    // Case 12: All products are either Returned, Cancelled, or Expired
+    const isTerminal = (s: string) => s === 'Returned' || s === 'Return' || s === 'Cancelled' || s === 'Expired';
     if (statuses.every(isTerminal)) return 'Closed';
 
     // Cases 5, 6, 9, 13 (Mixes with Delivered or Out for Delivery)

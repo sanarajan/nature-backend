@@ -10,7 +10,8 @@ import {
     RequestItemCancellationUseCase,
     RequestReturnUseCase,
     RequestItemReturnUseCase,
-    GetShippingChargeUseCase
+    GetShippingChargeUseCase,
+    RetryPaymentUseCase
 } from '../../application/usecases/catalog/UserOrderUseCases';
 import { CalculateCheckoutTotalsUseCase } from '../../application/usecases/catalog/CalculateCheckoutTotalsUseCase';
 
@@ -27,7 +28,8 @@ export class UserOrderController {
         @inject('IRequestReturnUseCase') private requestReturnUseCase: RequestReturnUseCase,
         @inject('IRequestItemReturnUseCase') private requestItemReturnUseCase: RequestItemReturnUseCase,
         @inject('IGetShippingChargeUseCase') private getShippingChargeUseCase: GetShippingChargeUseCase,
-        @inject('ICalculateCheckoutTotalsUseCase') private calculateCheckoutTotalsUseCase: CalculateCheckoutTotalsUseCase
+        @inject('ICalculateCheckoutTotalsUseCase') private calculateCheckoutTotalsUseCase: CalculateCheckoutTotalsUseCase,
+        @inject('IRetryPaymentUseCase') private retryPaymentUseCase: RetryPaymentUseCase
     ) { }
 
     public async calculateCheckoutTotals(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -199,6 +201,22 @@ export class UserOrderController {
             const charge = await this.getShippingChargeUseCase.execute(state);
 
             res.status(200).json({ success: true, data: charge });
+        } catch (error: any) {
+            next(error);
+        }
+    }
+
+    public async retryPayment(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const userId = (req as any).user.id;
+            const orderId = req.params.id as string;
+            const result = await this.retryPaymentUseCase.execute(userId, orderId);
+
+            res.status(200).json({
+                success: true,
+                message: 'Payment retry initiated',
+                data: result
+            });
         } catch (error: any) {
             next(error);
         }

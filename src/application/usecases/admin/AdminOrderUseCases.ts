@@ -79,6 +79,15 @@ export class UpdateOrderStatusUseCase {
             throw new AppError('Order not found', STATUS_CODES.NOT_FOUND);
         }
 
+        const isUnpaidOnline = order.paymentMethod !== 'COD' && (
+            order.globalOrderStatus === 'PENDING' || 
+            order.globalOrderStatus === 'Expired' ||
+            ['Pending', 'Failed', 'Expired'].includes(order.paymentStatus || 'Pending')
+        );
+        if (isUnpaidOnline && status !== 'Cancelled') {
+            throw new AppError('Cannot advance order status for an online order with unconfirmed payment.', STATUS_CODES.BAD_REQUEST);
+        }
+
         let updatedItemName = 'All Items';
         let shippedProduct = null;
 

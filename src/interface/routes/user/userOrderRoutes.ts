@@ -15,6 +15,7 @@ router.post('/:id/cancel-item/:productId', userAuthProtect, (req, res, next) => 
 router.post('/:id/return', userAuthProtect, (req, res, next) => userOrderController.requestReturn(req, res, next));
 router.post('/:id/return-item/:productId', userAuthProtect, (req, res, next) => userOrderController.requestItemReturn(req, res, next));
 router.get('/shipping-charge/:state', userAuthProtect, (req, res, next) => userOrderController.getShippingCharge(req, res, next));
+router.post('/:id/retry-payment', userAuthProtect, (req, res, next) => userOrderController.retryPayment(req, res, next));
 router.post('/verify-payment', userAuthProtect, (req, res, next) => userOrderController.verifyPayment(req, res, next));
 router.post('/payment/webhook', (req, res, next) => userOrderController.handleRazorpayWebhook(req, res, next));
 

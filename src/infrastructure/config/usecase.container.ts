@@ -224,7 +224,7 @@ container.registerSingleton<UpdatePaymentStatusUseCase>('IUpdatePaymentStatusUse
 container.registerSingleton<AdminReturnCancellationUseCases>('IAdminReturnCancellationUseCases', AdminReturnCancellationUseCases);
 
 // User Order UseCases
-import { PlaceOrderUseCase, VerifyPaymentUseCase, HandleRazorpayWebhookUseCase, GetUserOrdersUseCase, GetUserOrderDetailsUseCase, RequestCancellationUseCase, RequestItemCancellationUseCase, RequestReturnUseCase, RequestItemReturnUseCase, GetShippingChargeUseCase } from '../../application/usecases/catalog/UserOrderUseCases';
+import { PlaceOrderUseCase, VerifyPaymentUseCase, HandleRazorpayWebhookUseCase, GetUserOrdersUseCase, GetUserOrderDetailsUseCase, RequestCancellationUseCase, RequestItemCancellationUseCase, RequestReturnUseCase, RequestItemReturnUseCase, GetShippingChargeUseCase, RetryPaymentUseCase } from '../../application/usecases/catalog/UserOrderUseCases';
 import { CalculateCheckoutTotalsUseCase } from '../../application/usecases/catalog/CalculateCheckoutTotalsUseCase';
 container.registerSingleton<PlaceOrderUseCase>('IPlaceOrderUseCase', PlaceOrderUseCase);
 container.registerSingleton<VerifyPaymentUseCase>('IVerifyPaymentUseCase', VerifyPaymentUseCase);
@@ -237,6 +237,7 @@ container.registerSingleton<RequestReturnUseCase>('IRequestReturnUseCase', Reque
 container.registerSingleton<RequestItemReturnUseCase>('IRequestItemReturnUseCase', RequestItemReturnUseCase);
 container.registerSingleton<GetShippingChargeUseCase>('IGetShippingChargeUseCase', GetShippingChargeUseCase);
 container.registerSingleton<CalculateCheckoutTotalsUseCase>('ICalculateCheckoutTotalsUseCase', CalculateCheckoutTotalsUseCase);
+container.registerSingleton<RetryPaymentUseCase>('IRetryPaymentUseCase', RetryPaymentUseCase);
 
 // Application Services
 container.registerSingleton<AuthService>('IAuthService', AuthService);

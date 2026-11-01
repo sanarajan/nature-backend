@@ -70,6 +70,7 @@ export class ProductRepository implements IProductRepository {
 
     async getProductCountsByCategory(): Promise<Array<{ _id: string, count: number }>> {
         return await ProductModel.aggregate([
+               { $match: { isActive: true } },
             { $group: { _id: "$categoryId", count: { $sum: 1 } } }
         ]);
     }

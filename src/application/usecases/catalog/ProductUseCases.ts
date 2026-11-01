@@ -97,9 +97,12 @@ export class ProductUseCases {
             query.categoryId = { $in: catIds };
         }
         if (subcategoryId) {
-            const subIds = typeof subcategoryId === 'string' ? subcategoryId.split(',') : (Array.isArray(subcategoryId) ? subcategoryId : [subcategoryId]);
-            query.subcategoryId = { $in: subIds };
-        }
+    const subIds = typeof subcategoryId === 'string'
+        ? subcategoryId.split(',')
+        : (Array.isArray(subcategoryId) ? subcategoryId : [subcategoryId]);
+
+    query.subcategoryId = { $in: [...subIds, null] };
+}
         if (search) {
             query.productName = { $regex: search, $options: 'i' };
         }
